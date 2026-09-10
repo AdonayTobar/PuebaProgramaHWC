@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sistema HWC</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>if(typeof XLSX==='undefined')document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}</script>
@@ -1344,23 +1345,35 @@ function vistaExportar(){
     +'</div></div>';
 }
 function exportarExcel(){
-  if(typeof XLSX==='undefined'){toast('⚠️ No se pudo cargar la librería de Excel');return;}
+  if(typeof XLSX==='undefined'||!XLSX.utils){toast('⚠️ La librería de Excel no cargó. Verifica tu conexión y recarga.');return;}
   var rows=serviciosExport();
   if(!rows.length){toast('⚠️ No hay servicios que coincidan con los filtros');return;}
-  rows=rows.slice().sort(function(a,b){return a.fecha<b.fecha?-1:1;});
-  var data=rows.map(function(s){var p=propDe(s.propId)||{};
-    return [s.id,s.fecha,p.id||s.propId,p.nombre||'(eliminada)',p.servicio||'',p.ciudad||'',s.cuadrilla||'',s.estado,s.notas||'',s.por||'',horaDe(s.ts)];});
-  var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
-    ['ID','Fecha','Prop. ID','Propiedad','Servicio','Ciudad','Cuadrilla','Estado','Notas','Registró','Hora']
-  ].concat(data)),'Servicios');
-  var propsData=props.map(function(p){
-    return [p.id,p.nombre,p.servicio,p.ciudad,p.cuadrilla,p.contratista,diasTexto(p),p.ciclo,p.patron,p.costoTipo,p.costoMonto,calcMensual(p),p.estado];});
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([
-    ['ID','Nombre','Servicio','Ciudad','Cuadrilla','Contratista','Días','Ciclo','Patrón','Costo tipo','Costo','Costo mensual est.','Estado']
-  ].concat(propsData)),'Propiedades');
-  XLSX.writeFile('RutaLimpia_'+fechaISO(new Date())+'.xlsx');
-  toast('⬇️ Excel descargado ('+rows.length+' servicios)');
+  try{
+    rows=rows.slice().sort(function(a,b){return a.fecha<b.fecha?-1:1;});
+    var data=rows.map(function(s){var p=propDe(s.propId)||{};
+      return [s.id,s.fecha,p.id||s.propId,p.nombre||'(eliminada)',p.servicio||'',p.ciudad||'',s.cuadrilla||'',s.estado,s.notas||'',s.por||'',horaDe(s.ts)];});
+    var wb=XLSX.utils.book_new();
+    var wsServ=XLSX.utils.aoa_to_sheet([['ID','Fecha','Prop. ID','Propiedad','Servicio','Ciudad','Cuadrilla','Estado','Notas','Registró','Hora']].concat(data));
+    wsServ['!cols']=[{wch:9},{wch:11},{wch:9},{wch:38},{wch:9},{wch:15},{wch:14},{wch:12},{wch:45},{wch:14},{wch:7}];
+    XLSX.utils.book_append_sheet(wb,wsServ,'Servicios');
+    var propsData=props.map(function(p){
+      return [p.id,p.nombre,p.servicio,p.ciudad,p.cuadrilla,p.contratista,diasTexto(p),p.ciclo,p.patron,p.costoTipo,p.costoMonto,calcMensual(p),p.estado];});
+    var wsProps=XLSX.utils.aoa_to_sheet([['ID','Nombre','Servicio','Ciudad','Cuadrilla','Contratista','Días','Ciclo','Patrón','Costo tipo','Costo','Costo mensual est.','Estado']].concat(propsData));
+    wsProps['!cols']=[{wch:9},{wch:38},{wch:9},{wch:15},{wch:14},{wch:11},{wch:22},{wch:10},{wch:11},{wch:10},{wch:8},{wch:16},{wch:11}];
+    XLSX.utils.book_append_sheet(wb,wsProps,'Propiedades');
+    /* Descarga manual con Blob — evita el fallo interno de XLSX.writeFile en la build 0.18.5 */
+    var wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+    var blob=new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download='RutaLimpia_'+fechaISO(new Date())+'.xlsx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},2000);
+    toast('⬇️ Excel descargado ('+rows.length+' servicios)');
+  }catch(err){
+    console.error('Error exportando Excel:',err);
+    toast('❌ No se pudo generar el Excel: '+err.message);
+  }
 }
 
 /* ===== RECONSTRUÍDO: RESTAURAR DEMO ===== */

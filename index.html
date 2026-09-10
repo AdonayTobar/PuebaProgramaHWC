@@ -11,15 +11,32 @@
 <script>tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}</script>
 <style>
   ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9px}
+
+  /* ===== ANTI-SCROLL HORIZONTAL (móvil) ===== */
+  html,body{max-width:100%;overflow-x:hidden}
+  @supports (overflow-x:clip){html,body{overflow-x:clip}} /* clip no rompe el header sticky */
+  .grid>*{min-width:0}
+  select,input,textarea{min-width:0;max-width:100%}
+  img,svg,video{max-width:100%}
+  *{-webkit-tap-highlight-color:transparent}
+
   @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   @keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
   .anim{animation:fadeUp .3s ease both}.pop{animation:pop .18s ease both}
   .sticky-head th{position:sticky;top:0;background:#f8fafc;box-shadow:0 1px 0 0 #e2e8f0;z-index:5}
   .rowclick{cursor:pointer}.rowclick:hover{background:#f0f9ff}
+  .rowclick:active{transform:scale(.985)} /* feedback táctil en tarjetas */
   .lbl{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b}
   .inp{margin-top:.25rem;width:100%;border:1px solid #e2e8f0;border-radius:.75rem;padding:.65rem .9rem;font-size:.875rem;outline:none;transition:box-shadow .15s;background:#fff}
   .inp:focus{box-shadow:0 0 0 2px rgba(14,165,233,.5)}
   .inp:disabled{background:#f1f5f9;color:#94a3b8}
+
+  /* ===== SOLO MÓVIL (≤640px) ===== */
+  @media (max-width:640px){
+    input,select,textarea{font-size:16px !important} /* evita el auto-zoom de iOS al enfocar */
+    #toast{bottom:calc(1.5rem + env(safe-area-inset-bottom))} /* no choca con la barra del iPhone */
+    #mobileMenu nav{overscroll-behavior:contain}
+  }
 </style>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 overflow-x-hidden">
@@ -672,17 +689,17 @@ function vistaPropiedades(){
   return '<div class="anim space-y-4">'
     +crumb([{t:'Inicio',fn:"ir('dashboard')"},{t:'Propiedades'}])
     +'<div class="flex items-start justify-between gap-3 flex-wrap">'
-    +'<div><h1 class="text-2xl lg:text-3xl font-extrabold">Propiedades</h1><p class="text-slate-500 text-sm mt-1">'+props.length+' propiedades registradas</p></div>'
+    +'<div class="min-w-0"><h1 class="text-2xl lg:text-3xl font-extrabold">Propiedades</h1><p class="text-slate-500 text-sm mt-1">'+props.length+' propiedades registradas</p></div>'
     +(rolOro()?'<button onclick="formPropiedad(null)" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-5 py-2.5 rounded-xl shadow transition active:scale-95 text-sm">＋ Nueva propiedad</button>':'')
     +'</div>'
     +'<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">'
-    +'<input id="fQ" value="'+esc(f.q)+'" oninput="estado.filtros.q=this.value;renderListado()" placeholder="🔍 Buscar por nombre o ID…" class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500 transition">'
+    +'<input id="fQ" value="'+esc(f.q)+'" oninput="estado.filtros.q=this.value;renderListado()" placeholder="🔍 Buscar por nombre o ID…" class="w-full min-w-0 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500 transition">'
     +'<div class="grid grid-cols-2 lg:grid-cols-5 gap-2">'
-    +'<select id="fCiudad" onchange="estado.filtros.ciudad=this.value;renderListado()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todas las ciudades</option></select>'
-    +'<select id="fServ" onchange="estado.filtros.servicio=this.value;renderListado()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todo servicio</option><option'+(f.servicio==='Porter'?' selected':'')+'>Porter</option><option'+(f.servicio==='Sweep'?' selected':'')+'>Sweep</option></select>'
-    +'<select id="fCua" onchange="estado.filtros.cuadrilla=this.value;renderListado()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Toda cuadrilla</option></select>'
-    +'<select id="fEstado" onchange="estado.filtros.estado=this.value;renderListado()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todo estado</option><option'+(f.estado==='Activa'?' selected':'')+'>Activa</option><option'+(f.estado==='Suspendida'?' selected':'')+'>Suspendida</option></select>'
-    +'<select id="fOrden" onchange="estado.orden=this.value;renderListado()" class="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="ciudad"'+(estado.orden==='ciudad'?' selected':'')+'>Orden: Ciudad</option><option value="nombre"'+(estado.orden==='nombre'?' selected':'')+'>Orden: Nombre</option><option value="costo"'+(estado.orden==='costo'?' selected':'')+'>Orden: Costo mensual</option></select>'
+    +'<select id="fCiudad" onchange="estado.filtros.ciudad=this.value;renderListado()" class="w-full min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todas las ciudades</option></select>'
+    +'<select id="fServ" onchange="estado.filtros.servicio=this.value;renderListado()" class="w-full min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todo servicio</option><option'+(f.servicio==='Porter'?' selected':'')+'>Porter</option><option'+(f.servicio==='Sweep'?' selected':'')+'>Sweep</option></select>'
+    +'<select id="fCua" onchange="estado.filtros.cuadrilla=this.value;renderListado()" class="w-full min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Toda cuadrilla</option></select>'
+    +'<select id="fEstado" onchange="estado.filtros.estado=this.value;renderListado()" class="w-full min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500"><option value="">Todo estado</option><option'+(f.estado==='Activa'?' selected':'')+'>Activa</option><option'+(f.estado==='Suspendida'?' selected':'')+'>Suspendida</option></select>'
+    +'<select id="fOrden" onchange="estado.orden=this.value;renderListado()" class="w-full min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500 col-span-2 lg:col-span-1"><option value="ciudad"'+(estado.orden==='ciudad'?' selected':'')+'>Orden: Ciudad</option><option value="nombre"'+(estado.orden==='nombre'?' selected':'')+'>Orden: Nombre</option><option value="costo"'+(estado.orden==='costo'?' selected':'')+'>Orden: Costo mensual</option></select>'
     +'</div></div>'
     +'<div id="listadoProps"></div>'
     +'</div>';
@@ -965,10 +982,10 @@ function rutaCard(j){
   return '<button onclick="verRuta(\''+j.id+'\')" class="w-full text-left bg-white rounded-2xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition">'
     +'<div class="flex items-start justify-between gap-2"><div class="min-w-0"><p class="font-bold text-sm truncate">'+esc(j.nombre||('Jornada '+j.cuadrilla))+'</p>'
     +'<p class="text-[11px] text-slate-400 mt-0.5 capitalize">'+rangoFechas(j)+'</p></div>'
-    +chipCuad(j.cuadrilla)+'</div>'
+    +'<div class="shrink-0">'+chipCuad(j.cuadrilla)+'</div></div>'
     +'<div class="mt-3 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full '+s.bar+' rounded-full transition-all" style="width:'+pct+'%"></div></div>'
-    +'<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500 gap-2"><span class="shrink-0">'+pr.hechas+'/'+pr.total+' hechas'+(pr.posp?' · '+pr.posp+' posp':'')+'</span>'
-    +'<span class="truncate">Por '+esc(j.creadaPor)+'</span></div></button>';
+    +'<div class="flex items-center justify-between mt-2 text-[11px] text-slate-500 gap-2 min-w-0"><span class="shrink-0">'+pr.hechas+'/'+pr.total+' hechas'+(pr.posp?' · '+pr.posp+' posp':'')+'</span>'
+    +'<span class="truncate min-w-0 text-right">Por '+esc(j.creadaPor)+'</span></div></button>';
 }
 function vistaRutas(){
   var rf=estado.rutaFiltros;
@@ -1006,7 +1023,7 @@ function vistaRutaDetalle(){
     var sv=it.servId?servicios.filter(function(x){return x.id===it.servId;})[0]:null;
     var acciones='';
     if(it.estado==='Pendiente'&&puedeOp){
-      acciones='<div class="flex gap-2 shrink-0">'
+      acciones=acciones='<div class="flex gap-2 sm:shrink-0 justify-end sm:justify-start">'
         +'<button onclick="abrirServModal(\''+it.propId+'\',\''+j.id+'\')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition active:scale-95">✅ Registrar</button>'
         +'<button onclick="abrirPosModal(\''+it.propId+'\',\''+j.id+'\')" title="Posponer" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-lg transition active:scale-95">⏩</button>'
         +(puedeEd?'<button onclick="quitarItemJornada(\''+j.id+'\',\''+it.propId+'\')" title="Quitar de la ruta" class="border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 text-xs font-bold px-2.5 py-2 rounded-lg transition">🗑</button>':'')
@@ -1018,7 +1035,7 @@ function vistaRutaDetalle(){
     }else{
       acciones='<div class="shrink-0">'+badgeServicio(it.estado)+'</div>';
     }
-    return '<div class="flex items-center gap-3 px-3 sm:px-4 py-3 border border-slate-100 rounded-xl bg-white">'
+    return '<div class="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 border border-slate-100 rounded-xl bg-white">'
       +'<div class="min-w-0 flex-1 '+(p?'cursor-pointer':'')+'" '+(p?'onclick="verPropiedad(\''+it.propId+'\')"':'')+'>'
       +'<p class="text-sm font-bold truncate">'+esc(p?p.nombre:it.propId+' (eliminada)')+'</p>'
       +'<div class="flex items-center gap-2 mt-0.5 flex-wrap">'+(p?chipServ(p.servicio):'')+(p?'<span class="text-[10px] text-slate-400">'+esc(p.ciudad)+'</span>':'')+'</div>'

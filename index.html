@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script>if (typeof XLSX === 'undefined') document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>');</script>
+  <!-- SDK DE SUPABASE -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } }</script>
@@ -165,6 +167,71 @@
 </head>
 
 <body class="bg-slate-100 font-sans text-slate-800 overflow-x-hidden">
+
+  <!-- ============ PANTALLA DE LOGIN PROFESIONAL ============ -->
+  <div id="loginOverlay"
+    class="hidden fixed inset-0 z-[100] bg-gradient-to-br from-slate-900 via-sky-900 to-slate-900 flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <!-- Card -->
+      <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+
+        <!-- Header con branding -->
+        <div class="bg-gradient-to-br from-sky-500 to-cyan-600 p-8 text-center text-white">
+          <div
+            class="w-16 h-16 mx-auto rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-4xl shadow-lg mb-3">
+            🧹</div>
+          <h2 class="text-2xl font-extrabold tracking-tight">HWC Limpieza</h2>
+          <p class="text-sky-100 text-sm mt-1">Sistema de Gestión de Rutas</p>
+        </div>
+
+        <!-- Form -->
+        <div class="p-6 sm:p-8 space-y-5">
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Correo
+              electrónico</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">✉️</span>
+              <input id="loginEmail" type="email" name="email" autocomplete="email" required placeholder="tu@correo.com"
+                class="w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500 transition">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Contraseña</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔒</span>
+              <input id="loginPass" type="password" name="password" autocomplete="current-password" required
+                placeholder="••••••••"
+                class="w-full pl-10 pr-10 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500 transition"
+                onkeypress="if(event.key==='Enter')hacerLogin()">
+              <button type="button" onclick="togglePassVisibility()"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-sky-600 transition">
+                <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none"
+                  viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <p id="loginError"
+            class="text-rose-500 text-xs bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 hidden"></p>
+
+          <button id="loginBtn" onclick="hacerLogin()"
+            class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-sky-600/20 transition active:scale-95 flex items-center justify-center gap-2">
+            <span id="loginBtnText">Entrar</span>
+            <div id="loginBtnSpinner"
+              class="hidden w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin"></div>
+          </button>
+
+        </div>
+      </div>
+      <p class="text-center text-slate-400 text-xs mt-6">© 2024 HWC Limpieza · Texas</p>
+    </div>
+  </div>
 
   <!-- ============ SIDEBAR SOLO PC (intacta) ============ -->
   <!-- ============ SIDEBAR SOLO PC ============ -->
@@ -518,6 +585,107 @@
   </div>
 
   <script>
+
+    /* ================= SUPABASE INIT ================= */
+    // PEGA AQUÍ TUS DATOS DE SUPABASE
+    const SUPABASE_URL = 'https://cosvznincgvfegbvlzu.supabase.co'; // CAMBIA ESTO
+    const SUPABASE_KEY = 'sb_publishable_51mY9dtAAgd72mtOvF5ZNw_ET7ZGfp2'; // CAMBIA ESTO
+
+    // Crear la conexión
+    var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Función para mostrar/ocultar pantallas de carga
+    function toggleLoading(show) {
+      var el = document.getElementById('loadingOverlay');
+      if (el) el.classList.toggle('hidden', !show);
+    }
+
+    /* ================= LÓGICA DE LOGIN ================= */
+
+    // Mostrar/ocultar contraseña
+    function togglePassVisibility() {
+      var input = $('loginPass');
+      var icon = $('eyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        // Ícono de ojo cerrado (rayita)
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />';
+      } else {
+        input.type = 'password';
+        // Ícono de ojo abierto
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
+      }
+    }
+
+    async function hacerLogin() {
+      var email = $('loginEmail').value.trim();
+      var pass = $('loginPass').value;
+      var errBox = $('loginError');
+      var btn = $('loginBtn');
+      var btnText = $('loginBtnText');
+      var btnSpinner = $('loginBtnSpinner');
+
+      errBox.classList.add('hidden');
+
+      if (!email || !pass) {
+        errBox.textContent = '⚠️ Por favor ingresa correo y contraseña';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      // Estado de cargando en el botón
+      btn.disabled = true;
+      btn.classList.add('opacity-70', 'cursor-wait');
+      btnText.textContent = 'Entrando...';
+      btnSpinner.classList.remove('hidden');
+
+      toggleLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: pass });
+      toggleLoading(false);
+
+      // Restaurar botón
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-wait');
+      btnText.textContent = 'Entrar';
+      btnSpinner.classList.add('hidden');
+
+      if (error) {
+        // Traducir el error más común de Supabase
+        var msg = error.message;
+        if (msg === 'Invalid login credentials') msg = 'Correo o contraseña incorrectos';
+        errBox.textContent = '❌ ' + msg;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function cerrarSesion() {
+      toggleLoading(true);
+      await supabase.auth.signOut();
+      // El listener de abajo se encargará de mostrar el login de nuevo
+    }
+
+    // EL LISTENER: Esta función se ejecuta automáticamente cada vez que alguien inicia o cierra sesión
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        // Hay sesión: Ocultamos login, cargamos datos y mostramos app
+        $('loginOverlay').classList.add('hidden');
+        $('loadingOverlay').classList.remove('hidden');
+
+        // Por ahora, simulamos que el usuario es el Admin Oro de tu código.
+        // En el siguiente paso, aquí pediremos a Supabase el ROL real de este usuario.
+        USUARIO = USUARIOS_DEMO[0];
+        load(); // Carga tus datos demo
+        renderApp(); // Dibuja la app
+
+        $('loadingOverlay').classList.add('hidden');
+      } else {
+        // No hay sesión: Mostramos login y ocultamos app
+        $('loginOverlay').classList.remove('hidden');
+        $('loadingOverlay').classList.add('hidden');
+        $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
+      }
+    });
+
     /* ================= CONSTANTES ================= */
     var DIAS = [['L', 'Lun'], ['M', 'Mar'], ['X', 'Mié'], ['J', 'Jue'], ['V', 'Vie'], ['S', 'Sáb'], ['D', 'Dom']];
     var LETRA_A_DIA = { L: 'Lunes', M: 'Martes', X: 'Miércoles', J: 'Jueves', V: 'Viernes', S: 'Sábado', D: 'Domingo' };
@@ -985,6 +1153,20 @@
         }
         s.value = USUARIO.nombre;
       });
+
+      // ===== NUEVO: Inyectar botón de cerrar sesión si existe Supabase =====
+      var cerrarSesBtn = document.getElementById('btnCerrarSesion');
+      if (!cerrarSesBtn && typeof supabase !== 'undefined') {
+        var sidebarDiv = document.querySelector('#sidebar .mt-auto');
+        if (sidebarDiv) {
+          var b = document.createElement('button');
+          b.id = 'btnCerrarSesion';
+          b.onclick = cerrarSesion;
+          b.className = 'w-full text-[11px] text-rose-400 hover:text-rose-300 transition text-left px-3 mt-2 font-bold';
+          b.innerHTML = '🚪 Cerrar Sesión';
+          sidebarDiv.appendChild(b);
+        }
+      }
     }
     function cambiarUsuario(nombre) {
       for (var i = 0; i < USUARIOS_DEMO.length; i++) {
@@ -2364,8 +2546,9 @@
       if (e.key === 'Escape') { cerrarMenu(); cerrarDel(); cerrarServModal(); cerrarPosModal(); cerrarAddProp(); }
     });
     window.addEventListener('resize', aplicarSidebar);
-    load();
-    renderApp();
+    // Esperamos a que Supabase nos diga si hay sesión activa
+    // El listener 'onAuthStateChange' que pusimos arriba se encargará de llamar a load() y renderApp()
+    toggleLoading(true);
   </script>
 </body>
 

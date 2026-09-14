@@ -586,122 +586,6 @@
 
   <script>
 
-    /* ================= SUPABASE INIT ================= */
-    // PEGA AQUÍ TUS DATOS DE SUPABASE
-    const SUPABASE_URL = 'https://cosvznincguvfegbvzlu.supabase.co'; // CAMBIA ESTO
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvc3Z6bmluY2d1dmZlZ2J2emx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMTI5MzEsImV4cCI6MjEwNDg4ODkzMX0.JiilpMuZZ5BCITn4jjfrMTRvOiT6GnbzeD4fmVFG-iU'; // CAMBIA ESTO
-
-    // Crear la conexión
-    var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Función para mostrar/ocultar pantallas de carga
-    function toggleLoading(show) {
-      var el = document.getElementById('loadingOverlay');
-      if (el) el.classList.toggle('hidden', !show);
-    }
-
-    /* ================= LÓGICA DE LOGIN ================= */
-
-    // Mostrar/ocultar contraseña
-    function togglePassVisibility() {
-      var input = $('loginPass');
-      var icon = $('eyeIcon');
-      if (input.type === 'password') {
-        input.type = 'text';
-        // Ícono de ojo cerrado (rayita)
-        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />';
-      } else {
-        input.type = 'password';
-        // Ícono de ojo abierto
-        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
-      }
-    }
-
-    async function hacerLogin() {
-      var email = $('loginEmail').value.trim();
-      var pass = $('loginPass').value;
-      var errBox = $('loginError');
-      var btn = $('loginBtn');
-      var btnText = $('loginBtnText');
-      var btnSpinner = $('loginBtnSpinner');
-
-      errBox.classList.add('hidden');
-
-      if (!email || !pass) {
-        errBox.textContent = '⚠️ Por favor ingresa correo y contraseña';
-        errBox.classList.remove('hidden');
-        return;
-      }
-
-      // Estado de cargando en el botón
-      btn.disabled = true;
-      btn.classList.add('opacity-70', 'cursor-wait');
-      btnText.textContent = 'Entrando...';
-      btnSpinner.classList.remove('hidden');
-
-      toggleLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: pass });
-      toggleLoading(false);
-
-      // Restaurar botón
-      btn.disabled = false;
-      btn.classList.remove('opacity-70', 'cursor-wait');
-      btnText.textContent = 'Entrar';
-      btnSpinner.classList.add('hidden');
-
-      if (error) {
-        // Traducir el error más común de Supabase
-        var msg = error.message;
-        if (msg === 'Invalid login credentials') msg = 'Correo o contraseña incorrectos';
-        errBox.textContent = '❌ ' + msg;
-        errBox.classList.remove('hidden');
-      }
-    }
-
-    async function cerrarSesion() {
-      toggleLoading(true);
-      await supabase.auth.signOut();
-      // El listener de abajo se encargará de mostrar el login de nuevo
-    }
-
-    // EL LISTENER: Esta función se ejecuta automáticamente cada vez que alguien inicia o cierra sesión
-    supabase.auth.onAuthStateChange((event, session) => {
-      try {
-        if (session) {
-          // Hay sesión: Ocultamos login, cargamos datos y mostramos app
-          $('loginOverlay').classList.add('hidden');
-          $('loadingOverlay').classList.remove('hidden');
-
-          // Forzar la vista Dashboard y limpiar el historial al iniciar sesión
-          estado.vista = 'dashboard';
-          estado.param = null;
-          estado.history = [];
-
-          // Simulamos el usuario Admin Oro
-          USUARIO = USUARIOS_DEMO[0];
-          
-          load(); // Carga los datos guardados
-          
-          // Si por alguna razón no hay datos en memoria, forzamos los datos demo
-          if(props.length === 0 || crews.length === 0) {
-            restaurarDemo(); // Esto carga los SEED y llama a renderApp() automáticamente
-          } else {
-            renderApp(); // Si sí había datos, dibujamos la app
-          }
-
-          $('loadingOverlay').classList.add('hidden');
-        } else {
-          // No hay sesión: Mostramos login y ocultamos app
-          $('loginOverlay').classList.remove('hidden');
-          $('loadingOverlay').classList.add('hidden');
-          $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
-        }
-      } catch (err) {
-        console.error("Error al cargar la sesión:", err);
-        $('loadingOverlay').classList.add('hidden');
-      }
-    });
-
     /* ================= CONSTANTES ================= */
     var DIAS = [['L', 'Lun'], ['M', 'Mar'], ['X', 'Mié'], ['J', 'Jue'], ['V', 'Vie'], ['S', 'Sáb'], ['D', 'Dom']];
     var LETRA_A_DIA = { L: 'Lunes', M: 'Martes', X: 'Miércoles', J: 'Jueves', V: 'Viernes', S: 'Sábado', D: 'Domingo' };
@@ -2562,6 +2446,123 @@
       if (e.key === 'Escape') { cerrarMenu(); cerrarDel(); cerrarServModal(); cerrarPosModal(); cerrarAddProp(); }
     });
     window.addEventListener('resize', aplicarSidebar);
+
+    
+    /* ================= SUPABASE INIT ================= */
+    // PEGA AQUÍ TUS DATOS DE SUPABASE
+    const SUPABASE_URL = 'https://cosvznincguvfegbvzlu.supabase.co'; // CAMBIA ESTO
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvc3Z6bmluY2d1dmZlZ2J2emx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMTI5MzEsImV4cCI6MjEwNDg4ODkzMX0.JiilpMuZZ5BCITn4jjfrMTRvOiT6GnbzeD4fmVFG-iU'; // CAMBIA ESTO
+
+    // Crear la conexión
+    var supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Función para mostrar/ocultar pantallas de carga
+    function toggleLoading(show) {
+      var el = document.getElementById('loadingOverlay');
+      if (el) el.classList.toggle('hidden', !show);
+    }
+
+    /* ================= LÓGICA DE LOGIN ================= */
+
+    // Mostrar/ocultar contraseña
+    function togglePassVisibility() {
+      var input = $('loginPass');
+      var icon = $('eyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        // Ícono de ojo cerrado (rayita)
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />';
+      } else {
+        input.type = 'password';
+        // Ícono de ojo abierto
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
+      }
+    }
+
+    async function hacerLogin() {
+      var email = $('loginEmail').value.trim();
+      var pass = $('loginPass').value;
+      var errBox = $('loginError');
+      var btn = $('loginBtn');
+      var btnText = $('loginBtnText');
+      var btnSpinner = $('loginBtnSpinner');
+
+      errBox.classList.add('hidden');
+
+      if (!email || !pass) {
+        errBox.textContent = '⚠️ Por favor ingresa correo y contraseña';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      // Estado de cargando en el botón
+      btn.disabled = true;
+      btn.classList.add('opacity-70', 'cursor-wait');
+      btnText.textContent = 'Entrando...';
+      btnSpinner.classList.remove('hidden');
+
+      toggleLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: pass });
+      toggleLoading(false);
+
+      // Restaurar botón
+      btn.disabled = false;
+      btn.classList.remove('opacity-70', 'cursor-wait');
+      btnText.textContent = 'Entrar';
+      btnSpinner.classList.add('hidden');
+
+      if (error) {
+        // Traducir el error más común de Supabase
+        var msg = error.message;
+        if (msg === 'Invalid login credentials') msg = 'Correo o contraseña incorrectos';
+        errBox.textContent = '❌ ' + msg;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function cerrarSesion() {
+      toggleLoading(true);
+      await supabase.auth.signOut();
+      // El listener de abajo se encargará de mostrar el login de nuevo
+    }
+
+    // EL LISTENER: Esta función se ejecuta automáticamente cada vez que alguien inicia o cierra sesión
+    supabase.auth.onAuthStateChange((event, session) => {
+      try {
+        if (session) {
+          // Hay sesión: Ocultamos login, cargamos datos y mostramos app
+          $('loginOverlay').classList.add('hidden');
+          $('loadingOverlay').classList.remove('hidden');
+
+          // Forzar la vista Dashboard y limpiar el historial al iniciar sesión
+          estado.vista = 'dashboard';
+          estado.param = null;
+          estado.history = [];
+
+          // Simulamos el usuario Admin Oro
+          USUARIO = USUARIOS_DEMO[0];
+          
+          load(); // Carga los datos guardados
+          
+          // Si por alguna razón no hay datos en memoria, forzamos los datos demo
+          if(props.length === 0 || crews.length === 0) {
+            restaurarDemo(); // Esto carga los SEED y llama a renderApp() automáticamente
+          } else {
+            renderApp(); // Si sí había datos, dibujamos la app
+          }
+
+          $('loadingOverlay').classList.add('hidden');
+        } else {
+          // No hay sesión: Mostramos login y ocultamos app
+          $('loginOverlay').classList.remove('hidden');
+          $('loadingOverlay').classList.add('hidden');
+          $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
+        }
+      } catch (err) {
+        console.error("Error al cargar la sesión:", err);
+        $('loadingOverlay').classList.add('hidden');
+      }
+    });
     // Esperamos a que Supabase nos diga si hay sesión activa
     // El listener 'onAuthStateChange' que pusimos arriba se encargará de llamar a load() y renderApp()
     toggleLoading(true);

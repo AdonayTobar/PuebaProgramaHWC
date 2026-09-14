@@ -2526,43 +2526,54 @@
       // El listener de abajo se encargará de mostrar el login de nuevo
     }
 
-    // EL LISTENER: Esta función se ejecuta automáticamente cada vez que alguien inicia o cierra sesión
-    supabase.auth.onAuthStateChange((event, session) => {
-      try {
-        if (session) {
-          // Hay sesión: Ocultamos login, cargamos datos y mostramos app
-          $('loginOverlay').classList.add('hidden');
-          $('loadingOverlay').classList.remove('hidden');
+   // EL LISTENER: Solo para detectar cuando inicia o cierra sesión manualmente
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    inicializarApp();
+  } else if (event === 'SIGNED_OUT') {
+    $('loginOverlay').classList.remove('hidden');
+    $('loadingOverlay').classList.add('hidden');
+    $('contenido').innerHTML = '';
+  }
+});
 
-          // Forzar la vista Dashboard y limpiar el historial al iniciar sesión
-          estado.vista = 'dashboard';
-          estado.param = null;
-          estado.history = [];
+// NUEVA FUNCIÓN: Lee la sesión activa y carga la app de forma segura
+async function inicializarApp() {
+  console.log("Verificando sesión..."); // Para que lo veas en la consola
+  toggleLoading(true);
+  
+  const { data: { session }, error } = await supabase.auth.getSession();
+  
+  if (session) {
+    console.log("Sesión encontrada. Cargando dashboard..."); // Para que lo veas en la consola
+    $('loginOverlay').classList.add('hidden');
+    
+    estado.vista = 'dashboard';
+    estado.param = null;
+    estado.history = [];
+    USUARIO = USUARIOS_DEMO[0];
+    load();
+    
+    // Si no hay datos en memoria, forzamos los datos demo
+    if (props.length === 0 || crews.length === 0) {
+      console.log("Cargando datos demo..."); // Para que lo veas en la consola
+      restaurarDemo();
+    } else {
+      renderApp();
+    }
+    
+    $('loadingOverlay').classList.add('hidden');
+    console.log("App cargada con éxito."); // Para que lo veas en la consola
+  } else {
+    console.log("No hay sesión. Mostrando login."); // Para que lo veas en la consola
+    $('loginOverlay').classList.remove('hidden');
+    $('loadingOverlay').classList.add('hidden');
+    $('contenido').innerHTML = '';
+  }
+}
 
-          // Simulamos el usuario Admin Oro
-          USUARIO = USUARIOS_DEMO[0];
-          
-          load(); // Carga los datos guardados
-          
-          // Si por alguna razón no hay datos en memoria, forzamos los datos demo
-          if(props.length === 0 || crews.length === 0) {
-            restaurarDemo(); // Esto carga los SEED y llama a renderApp() automáticamente
-          } else {
-            renderApp(); // Si sí había datos, dibujamos la app
-          }
-
-          $('loadingOverlay').classList.add('hidden');
-        } else {
-          // No hay sesión: Mostramos login y ocultamos app
-          $('loginOverlay').classList.remove('hidden');
-          $('loadingOverlay').classList.add('hidden');
-          $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
-        }
-      } catch (err) {
-        console.error("Error al cargar la sesión:", err);
-        $('loadingOverlay').classList.add('hidden');
-      }
-    });
+// Arranque inicial de la página
+inicializarApp();
     // Esperamos a que Supabase nos diga si hay sesión activa
     // El listener 'onAuthStateChange' que pusimos arriba se encargará de llamar a load() y renderApp()
     toggleLoading(true);

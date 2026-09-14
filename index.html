@@ -666,23 +666,39 @@
 
     // EL LISTENER: Esta función se ejecuta automáticamente cada vez que alguien inicia o cierra sesión
     supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        // Hay sesión: Ocultamos login, cargamos datos y mostramos app
-        $('loginOverlay').classList.add('hidden');
-        $('loadingOverlay').classList.remove('hidden');
+      try {
+        if (session) {
+          // Hay sesión: Ocultamos login, cargamos datos y mostramos app
+          $('loginOverlay').classList.add('hidden');
+          $('loadingOverlay').classList.remove('hidden');
 
-        // Por ahora, simulamos que el usuario es el Admin Oro de tu código.
-        // En el siguiente paso, aquí pediremos a Supabase el ROL real de este usuario.
-        USUARIO = USUARIOS_DEMO[0];
-        load(); // Carga tus datos demo
-        renderApp(); // Dibuja la app
+          // Forzar la vista Dashboard y limpiar el historial al iniciar sesión
+          estado.vista = 'dashboard';
+          estado.param = null;
+          estado.history = [];
 
+          // Simulamos el usuario Admin Oro
+          USUARIO = USUARIOS_DEMO[0];
+          
+          load(); // Carga los datos guardados
+          
+          // Si por alguna razón no hay datos en memoria, forzamos los datos demo
+          if(props.length === 0 || crews.length === 0) {
+            restaurarDemo(); // Esto carga los SEED y llama a renderApp() automáticamente
+          } else {
+            renderApp(); // Si sí había datos, dibujamos la app
+          }
+
+          $('loadingOverlay').classList.add('hidden');
+        } else {
+          // No hay sesión: Mostramos login y ocultamos app
+          $('loginOverlay').classList.remove('hidden');
+          $('loadingOverlay').classList.add('hidden');
+          $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
+        }
+      } catch (err) {
+        console.error("Error al cargar la sesión:", err);
         $('loadingOverlay').classList.add('hidden');
-      } else {
-        // No hay sesión: Mostramos login y ocultamos app
-        $('loginOverlay').classList.remove('hidden');
-        $('loadingOverlay').classList.add('hidden');
-        $('contenido').innerHTML = ''; // Vaciamos el contenido de la app
       }
     });
 

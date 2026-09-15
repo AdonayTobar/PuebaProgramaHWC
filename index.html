@@ -498,9 +498,7 @@
     </div>
   </div>
 
-  <!-- MODAL ASIGNAR CUADRILLA RÁPIDO -->
-  <!-- MODAL ASIGNAR CUADRILLA RÁPIDO -->
-  <!-- MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR) -->
+  <!-- MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR Y FECHA) -->
   <div id="modalAsignarCua" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="cerrarAsignarCua()"></div>
     <div class="relative bg-white rounded-3xl w-full max-w-md pop max-h-[92vh] overflow-y-auto">
@@ -514,11 +512,14 @@
       <div class="p-5 sm:p-6 space-y-4">
         <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
           <button type="button" id="btnAsignPerm" onclick="toggleAsignTipo('perm')" class="py-2 rounded-lg font-bold text-sm transition bg-white text-sky-600 shadow">Permanente</button>
-          <button type="button" id="btnAsignHoy" onclick="toggleAsignTipo('hoy')" class="py-2 rounded-lg font-bold text-sm transition text-slate-500">Solo por hoy</button>
+          <button type="button" id="btnAsignHoy" onclick="toggleAsignTipo('hoy')" class="py-2 rounded-lg font-bold text-sm transition text-slate-500">Para una fecha</button>
         </div>
 
         <div id="asignPermBox" class="text-[11px] text-slate-500 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">Esta cuadrilla será la encargada desde ahora de esta propiedad.</div>
-        <div id="asignHoyBox" class="hidden text-[11px] text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Se agregará a la <b>Jornada de hoy</b> de la cuadrilla seleccionada, sin cambiar al dueño permanente.</div>
+        <div id="asignHoyBox" class="hidden text-[11px] text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 space-y-2">
+          <p>Se agregará a la <b>Jornada</b> de la cuadrilla seleccionada, sin cambiar al dueño permanente.</p>
+          <input id="asignFechaFutura" type="date" class="inp mt-1">
+        </div>
 
         <!-- BUSCADOR DINÁMICO -->
         <div>
@@ -1224,22 +1225,32 @@ function vistaCalendario() {
     var diaSel = estado.calDiaSel;
     var propsSel = props.filter(function (p) { return tieneServicioEseDia(p, diaSel); });
 
-    // Botones de Vista (Todas / Por Cuadrilla)
-    var btnTodas = estado.calVista !== 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
+    // Botones de Vista (Todas / Por Cuadrilla / Sin Asignar)
+    var btnTodas = estado.calVista !== 'cuadrillas' && estado.calVista !== 'sinasignar' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
     var btnCuad = estado.calVista === 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
+    var btnSin = estado.calVista === 'sinasignar' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
 
     html += '<div id="listaDia" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">';
     html += '<div class="flex items-center justify-between gap-3 flex-wrap mb-4">';
     html += '<h3 class="font-extrabold capitalize flex items-center gap-2 text-lg">📅 ' + fmtDiaFecha(diaSel) + ' <span class="text-slate-400 font-medium text-sm">(' + propsSel.length + ' propiedades)</span></h3>';
-    html += '<div class="flex gap-1 bg-slate-100 p-1 rounded-xl">';
+    html += '<div class="flex gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">';
     html += '<button onclick="cambiarVistaCal(\'todas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnTodas + '">Todas</button>';
     html += '<button onclick="cambiarVistaCal(\'cuadrillas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnCuad + '">Por Cuadrilla</button>';
+    html += '<button onclick="cambiarVistaCal(\'sinasignar\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnSin + '">⚠️ Sin Asignar</button>';
     html += '</div></div>';
 
     if (propsSel.length === 0) {
       html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades programadas para este día.</p>';
     } else {
-      if (estado.calVista === 'cuadrillas') {
+      if (estado.calVista === 'sinasignar') {
+        // VISTA SIN ASIGNAR
+        var propsSin = propsSel.filter(function(p){ return !p.cuadrilla; });
+        if (propsSin.length === 0) {
+          html += '<p class="text-sm text-emerald-600 p-4 text-center bg-emerald-50 rounded-xl">¡Genial! Todas las propiedades de este día tienen cuadrilla asignada.</p>';
+        } else {
+          html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSin.map(propCard).join('') + '</div>';
+        }
+      } else if (estado.calVista === 'cuadrillas') {
         // AGRUPAR POR CUADRILLA
         var grupos = {};
         propsSel.forEach(function (p) {
@@ -1276,7 +1287,7 @@ function vistaCalendario() {
           }
         });
       } else {
-        // VISTA TODAS (Original)
+        // VISTA TODAS
         html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
       }
     }
@@ -2366,8 +2377,7 @@ async function quitarItemJornada(jornId,pid){
   renderApp();toast('🗑️ Propiedad quitada de la ruta');
 }
 
-    /* ===== MODAL ASIGNAR CUADRILLA RÁPIDO ===== */
-/* ===== MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR) ===== */
+/* ===== MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR Y FECHA) ===== */
 var ASIGN_PROP = null, ASIGN_TIPO = 'perm', ASIGN_CREW_ID = null, ASIGN_FECHA = null;
 
 function abrirAsignarCua(propId, fechaIso){
@@ -2379,6 +2389,7 @@ function abrirAsignarCua(propId, fechaIso){
   ASIGN_CREW_ID = p.crew_id || null;
   $('asignProp').textContent = p.nombre + ' · ' + p.id;
   $('asignSearch').value = '';
+  $('asignFechaFutura').value = ASIGN_FECHA; // Por defecto pone hoy
   filtrarCuadrillasAsign();
   toggleAsignTipo('perm');
   $('modalAsignarCua').classList.remove('hidden');
@@ -2402,7 +2413,7 @@ function filtrarCuadrillasAsign(){
 
 function seleccionarAsignCrew(crewId, crewName){
   ASIGN_CREW_ID = crewId;
-  filtrarCuadrillasAsign(); // Actualiza el resaltado
+  filtrarCuadrillasAsign();
   toast('✅ Seleccionada: '+crewName);
 }
 
@@ -2424,23 +2435,57 @@ async function guardarAsignarCua(){
 
   if(ASIGN_TIPO === 'perm'){
     toggleLoading(true);
-    // Guardamos el ID de la cuadrilla en Supabase
     const { error } = await supabase.from('properties').update({ crew_id: ASIGN_CREW_ID }).eq('id', p.id);
     toggleLoading(false);
-    
     if(error){
       toast('❌ Error al guardar en la nube');
       console.error(error);
     } else {
-      // Actualizamos la memoria local
       p.crew_id = ASIGN_CREW_ID;
       p.cuadrilla = crews.find(c => c.id === ASIGN_CREW_ID)?.nombre || '';
-      toast('✅ Cuadrilla guardada en la nube');
+      toast('✅ Cuadrilla guardada como dueña permanente');
     }
   } else {
-    if(!ASIGN_CREW_ID){ toast('⚠️ Selecciona una cuadrilla para hoy'); return; }
-    // Aquí va la lógica de jornadas, la dejamos para el siguiente paso
-    toast('⏳ La asignación por hoy se habilitará pronto');
+    if(!ASIGN_CREW_ID){ toast('⚠️ Selecciona una cuadrilla'); return; }
+    var fechaSel = $('asignFechaFutura').value;
+    if(!fechaSel){ toast('⚠️ Selecciona una fecha'); return; }
+    
+    var crewName = crews.find(c => c.id === ASIGN_CREW_ID)?.nombre || '';
+    
+    // Buscamos si ya existe una jornada para esa cuadrilla y fecha
+    var j = jornadas.find(function(x){ return x.cuadrilla === crewName && x.fecha === fechaSel; });
+    
+    toggleLoading(true);
+    if(!j){
+      // Si no existe, la creamos en la nube
+      var jData = { 
+        crew_id: ASIGN_CREW_ID, fecha: fechaSel, fecha_fin: '', 
+        name: 'Ruta asignada ('+fechaSel+')', notas: 'Generada desde asignación rápida', 
+        created_by: USUARIO.nombre, created_by_role: USUARIO.rol 
+      };
+      const { data: newJ, error } = await supabase.from('journeys').insert(jData).select().single();
+      if(error){ toggleLoading(false); return toast('❌ Error al crear jornada futura'); }
+      
+      // Insertamos la propiedad en esa nueva jornada
+      await supabase.from('journey_items').insert({ journey_id: newJ.id, property_id: p.id, status: 'Pendiente' });
+      
+      j = { 
+        id: newJ.id, cuadrilla: crewName, crew_id: ASIGN_CREW_ID, fecha: fechaSel, 
+        fechaFin: '', nombre: jData.name, notas: jData.notas, creadaPor: USUARIO.nombre, 
+        creadaPorRol: USUARIO.rol, items: [{propId: p.id, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: ''}], 
+        ts: Date.now() 
+      };
+      jornadas.push(j);
+    } else {
+      // Si ya existe, solo agregamos la propiedad
+      var existe = j.items.some(it => it.propId === p.id);
+      if(!existe){
+        await supabase.from('journey_items').insert({ journey_id: j.id, property_id: p.id, status: 'Pendiente' });
+        j.items.push({propId: p.id, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: ''});
+      }
+    }
+    toggleLoading(false);
+    toast('✅ Asignada a la ruta del '+fechaSel);
   }
   cerrarAsignarCua();
   renderApp();

@@ -720,21 +720,100 @@
       });
       return arr;
     }
-    function save() { try { localStorage.setItem(KEY, JSON.stringify({ props: props, crews: crews, servicios: servicios, jornadas: jornadas, leidos: leidos, uName: USUARIO.nombre, sidebar: estado.sidebar })); } catch (e) { } }
-    function load() {
-      try {
-        var d = JSON.parse(localStorage.getItem(KEY));
-        if (d && d.props && d.props.length) {
-          props = d.props; crews = d.crews || CREW_SEED; servicios = d.servicios || []; jornadas = d.jornadas || []; leidos = d.leidos || {};
-          estado.sidebar = !!d.sidebar;
-          var u = null; if (d.uName) { for (var i = 0; i < USUARIOS_DEMO.length; i++) { if (USUARIOS_DEMO[i].nombre === d.uName) u = USUARIOS_DEMO[i]; } }
-          USUARIO = u ? { nombre: u.nombre, email: u.email, rol: u.rol, cuadrilla: u.cuadrilla } : USUARIOS_DEMO[0];
-        } else throw 0;
-      } catch (e) {
-        props = seedProps(); crews = JSON.parse(JSON.stringify(CREW_SEED));
-        servicios = generarServiciosDemo(); jornadas = generarJornadasDemo(); leidos = {}; USUARIO = USUARIOS_DEMO[0]; save();
-      }
-    }
+function save(){
+  // Los datos ahora se guardan directamente en Supabase mediante sus funciones específicas.
+  // Esta función local se desactiva temporalmente.
+}
+// NUEVA FUNCIÓN: Carga los datos directamente desde Supabase
+async function cargarDatosSupabase() {
+  // 1. Cargar Cuadrillas
+  const { data: crewsData, error: errorCrews } = await supabase.from('crews').select('*');
+  if (errorCrews) { console.error("Error crews:", errorCrews); return; }
+  
+  // Mapeamos los datos de la DB al formato que usa tu frontend
+  crews = (crewsData || []).map(function(c){
+    return { id: c.id, nombre: c.name, ciudad: c.city, color: c.color, responsable: c.responsable, telefono: c.telefono, notas: c.notas };
+  });
+
+  // 2. Cargar Propiedades (Hacemos un JOIN para traer el nombre de la cuadrilla)
+  const { data: propsData, error: errorProps } = await supabase.from('properties').select('*, crews(name)');
+  if (errorProps) { console.error("Error props:", errorProps); return; }
+  
+  props = (propsData || []).map(function(p){
+    return {
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      service: p.service,
+      city: p.city,
+      cuadrilla: p.crews ? p.crews.name : '', // Si tiene cuadrilla, traemos el nombre
+      contractor: p.contractor,
+      dias: p.days,
+      frecuenciaTipo: p.frequency_type,
+      diasMensual: p.days_monthly || [],
+      cycle: p.cycle,
+      pattern: p.pattern,
+      costoTipo: p.cost_type,
+      costoMonto: p.cost_amount,
+      visitasMes: p.visits_month,
+      estado: p.status,
+      fecha: p.fecha,
+      gate: p.gate,
+      dump: p.dump,
+      notas: p.notas
+    };
+  });
+
+  // 3. Cargar Jornadas e Items
+  const { data: jornadasData, error: errorJornadas } = await supabase.from('journeys').select('*, journey_items(*)');
+  if (errorJornadas) { console.error("Error jornadas:", errorJornadas); return; }
+  
+  jornadas = (jornadasData || []).map(function(j){
+    return {
+      id: j.id,
+      cuadrilla: crews.find(c => c.id === j.crew_id)?.nombre || '',
+      fecha: j.fecha,
+      fechaFin: j.fecha_fin,
+      nombre: j.name,
+      notas: j.notas,
+      creadaPor: j.created_by,
+      creadaPorRol: j.created_by_role,
+      ts: j.ts ? j.ts : Date.parse(j.created_at),
+      items: (j.journey_items || []).map(function(it){
+        return {
+          propId: it.property_id,
+          estado: it.status,
+          servId: it.service_id,
+          pospFecha: it.posp_fecha,
+          pospMotivo: it.posp_motivo,
+          pospPor: it.posp_por
+        };
+      })
+    };
+  });
+
+  // 4. Cargar Servicios (Historial)
+  const { data: servsData, error: errorServs } = await supabase.from('services').select('*');
+  if (errorServs) { console.error("Error services:", errorServs); return; }
+  
+  servicios = (servsData || []).map(function(s){
+    return {
+      id: s.id,
+      propId: s.property_id,
+      fecha: s.fecha,
+      estado: s.status,
+      cuadrilla: crews.find(c => c.id === s.crew_id)?.nombre || '',
+      notas: s.notas,
+      por: s.por,
+      ts: s.ts ? s.ts : Date.parse(s.created_at)
+    };
+  });
+}
+
+// La función load() ahora solo llama a la de Supabase
+function load(){
+  cargarDatosSupabase();
+}
 
     /* ================= HELPERS ================= */
     function $(id) { return document.getElementById(id); }
@@ -2539,37 +2618,24 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 // NUEVA FUNCIÓN: Lee la sesión activa y carga la app de forma segura
 async function inicializarApp() {
-  console.log("Verificando sesión..."); // Para que lo veas en la consola
   toggleLoading(true);
-  
   const { data: { session }, error } = await supabase.auth.getSession();
   
   if (session) {
-    console.log("Sesión encontrada. Cargando dashboard..."); // Para que lo veas en la consola
     $('loginOverlay').classList.add('hidden');
     
     estado.vista = 'dashboard';
     estado.param = null;
     estado.history = [];
-    USUARIO = USUARIOS_DEMO[0];
-    load();
+    USUARIO = USUARIOS_DEMO[0]; // Simulamos Admin Oro por ahora
     
-    // Si no hay datos en memoria, forzamos los datos demo
-    if (props.length === 0 || crews.length === 0) {
-      console.log("Cargando datos demo..."); // Para que lo veas en la consola
-      restaurarDemo();
-    } else {
-      renderApp();
-    }
+    await cargarDatosSupabase(); // <--- ESPERAMOS A QUE CARGUEN LOS 1,500 DATOS DE LA NUBE
     
-    $('loadingOverlay').classList.add('hidden');
-    console.log("App cargada con éxito."); // Para que lo veas en la consola
+    renderApp(); // Dibujamos la app
   } else {
-    console.log("No hay sesión. Mostrando login."); // Para que lo veas en la consola
     $('loginOverlay').classList.remove('hidden');
-    $('loadingOverlay').classList.add('hidden');
-    $('contenido').innerHTML = '';
   }
+  toggleLoading(false);
 }
 
 // Arranque inicial de la página

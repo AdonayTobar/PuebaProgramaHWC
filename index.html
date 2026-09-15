@@ -500,48 +500,36 @@
 
   <!-- MODAL ASIGNAR CUADRILLA RÁPIDO -->
   <!-- MODAL ASIGNAR CUADRILLA RÁPIDO -->
+  <!-- MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR) -->
   <div id="modalAsignarCua" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="cerrarAsignarCua()"></div>
     <div class="relative bg-white rounded-3xl w-full max-w-md pop max-h-[92vh] overflow-y-auto">
-      <div
-        class="px-5 py-4 sm:px-6 border-b border-slate-100 flex items-center justify-between gap-3 sticky top-0 bg-white z-10">
+      <div class="px-5 py-4 sm:px-6 border-b border-slate-100 flex items-center justify-between gap-3 sticky top-0 bg-white z-10">
         <div class="min-w-0">
           <h3 class="font-extrabold text-lg">⚙️ Asignar Cuadrilla</h3>
           <p class="text-xs text-slate-500 truncate" id="asignProp"></p>
         </div>
-        <button onclick="cerrarAsignarCua()"
-          class="w-9 h-9 shrink-0 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 text-xl transition">✕</button>
+        <button onclick="cerrarAsignarCua()" class="w-9 h-9 shrink-0 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 text-xl transition">✕</button>
       </div>
       <div class="p-5 sm:p-6 space-y-4">
-
-        <!-- NUEVO: Selector Permanente vs Hoy -->
         <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-          <button type="button" id="btnAsignPerm" onclick="toggleAsignTipo('perm')"
-            class="py-2 rounded-lg font-bold text-sm transition bg-white text-sky-600 shadow">Permanente</button>
-          <button type="button" id="btnAsignHoy" onclick="toggleAsignTipo('hoy')"
-            class="py-2 rounded-lg font-bold text-sm transition text-slate-500">Solo por hoy</button>
+          <button type="button" id="btnAsignPerm" onclick="toggleAsignTipo('perm')" class="py-2 rounded-lg font-bold text-sm transition bg-white text-sky-600 shadow">Permanente</button>
+          <button type="button" id="btnAsignHoy" onclick="toggleAsignTipo('hoy')" class="py-2 rounded-lg font-bold text-sm transition text-slate-500">Solo por hoy</button>
         </div>
 
-        <div id="asignPermBox" class="text-[11px] text-slate-500 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
-          Esta cuadrilla será la encargada desde ahora de esta propiedad.</div>
-        <div id="asignHoyBox"
-          class="hidden text-[11px] text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Se agregará
-          a la <b>Jornada de hoy</b> de la cuadrilla seleccionada, sin cambiar al dueño permanente.</div>
+        <div id="asignPermBox" class="text-[11px] text-slate-500 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">Esta cuadrilla será la encargada desde ahora de esta propiedad.</div>
+        <div id="asignHoyBox" class="hidden text-[11px] text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Se agregará a la <b>Jornada de hoy</b> de la cuadrilla seleccionada, sin cambiar al dueño permanente.</div>
 
+        <!-- BUSCADOR DINÁMICO -->
         <div>
-          <label class="text-[11px] font-bold text-slate-500 tracking-wide">SELECCIONA LA CUADRILLA</label>
-          <select id="asignSel"
-            class="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white outline-none focus:ring-2 focus:ring-sky-500 transition">
-            <option value="">— Sin asignar —</option>
-          </select>
+          <label class="text-[11px] font-bold text-slate-500 tracking-wide">BUSCAR CUADRILLA</label>
+          <input id="asignSearch" type="text" oninput="filtrarCuadrillasAsign()" placeholder="🔍 Escribe el nombre..." class="inp mt-1">
+          <div id="asignList" class="mt-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100"></div>
         </div>
 
         <div class="flex justify-end gap-3 pt-1">
-          <button onclick="cerrarAsignarCua()"
-            class="px-5 py-2.5 rounded-xl border border-slate-200 font-semibold text-sm hover:bg-slate-50 transition">Cancelar</button>
-          <button onclick="guardarAsignarCua()"
-            class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition active:scale-95">💾
-            Guardar</button>
+          <button onclick="cerrarAsignarCua()" class="px-5 py-2.5 rounded-xl border border-slate-200 font-semibold text-sm hover:bg-slate-50 transition">Cancelar</button>
+          <button onclick="guardarAsignarCua()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition active:scale-95">💾 Guardar</button>
         </div>
       </div>
     </div>
@@ -1581,13 +1569,22 @@ function load(){
         + '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5"><h3 class="font-extrabold mb-3">📅 Próximos servicios</h3>' + proxHtml + '</div>'
         + '</div></div>';
     }
-    function togglePropEstado(id) {
-      if (!rolOro()) return;
-      var p = propDe(id); if (!p) return;
-      p.estado = p.estado === 'Activa' ? 'Suspendida' : 'Activa';
-      save(); renderApp();
-      toast(p.estado === 'Activa' ? '✅ Propiedad reactivada' : '⏸️ Propiedad suspendida');
-    }
+async function togglePropEstado(id){
+  if(!rolOro())return;
+  var p = propDe(id);if(!p)return;
+  var newStatus = p.estado==='Activa'?'Suspendida':'Activa';
+  
+  toggleLoading(true);
+  const { error } = await supabase.from('properties').update({ status: newStatus }).eq('id', p.id);
+  toggleLoading(false);
+  
+  if(error) toast('❌ Error al cambiar estado');
+  else {
+    p.estado = newStatus;
+    renderApp();
+    toast(p.estado==='Activa'?'✅ Propiedad reactivada':'⏸️ Propiedad suspendida');
+  }
+}
     function vistaPropForm() {
       var p = estado.param ? propDe(estado.param) : null;
       if (estado.param && !p) return '<div class="p-10 text-center"><p class="font-bold">Propiedad no encontrada</p></div>';
@@ -1724,45 +1721,86 @@ function load(){
       var tmp = { costoTipo: $('pfCostoTipo').value, costoMonto: Number($('pfCostoMonto').value) || 0, visitasMes: Number($('pfVisitasMes').value) || 0 };
       el.textContent = fmtMon(calcMensual(tmp));
     }
-    function guardarPropiedad() {
-      if (!rolOro()) return;
-      var nombre = $('pfNombre').value.trim();
-      if (!nombre) { toast('⚠️ El nombre es obligatorio'); return; }
+async function guardarPropiedad(){
+  if(!rolOro())return;
+  var nombre=$('pfNombre').value.trim();
+  if(!nombre){toast('⚠️ El nombre es obligatorio');return;}
+  
+  // Detectar tipo de frecuencia
+  var esSemanal = !$('vistaFrecSemanal').classList.contains('hidden');
+  var dias=''; 
+  var frecRegla='', frecDiaSemana='', frecDiaMes='';
+  var frecTipo = esSemanal ? 'Semanal' : 'Mensual';
+  
+  if(esSemanal){
+    var cbs=document.querySelectorAll('.pfDia');
+    for(var i=0;i<cbs.length;i++)if(cbs[i].checked)dias+=cbs[i].value;
+  } else {
+    var btns=document.querySelectorAll('.btn-mensual-dia.bg-sky-500');
+    for(var i=0;i<btns.length;i++)frecRegla += btns[i].getAttribute('data-val')+',';
+    frecRegla = frecRegla.slice(0, -1); // quitar última coma
+  }
 
-      // Detectar qué pestaña está activa
-      var esSemanal = !$('vistaFrecSemanal').classList.contains('hidden');
-      var dias = '';
-      var diasMensual = [];
-      var frecTipo = esSemanal ? 'Semanal' : 'Mensual';
-
-      if (esSemanal) {
-        var cbs = document.querySelectorAll('.pfDia');
-        for (var i = 0; i < cbs.length; i++)if (cbs[i].checked) dias += cbs[i].value;
-      } else {
-        // Leer botones visuales activos de la tabla mensual
-        var btns = document.querySelectorAll('.btn-mensual-dia.bg-sky-500');
-        for (var i = 0; i < btns.length; i++)diasMensual.push(btns[i].getAttribute('data-val'));
-        if (diasMensual.length === 0) { toast('⚠️ Selecciona al menos un día en la cuadrícula mensual'); return; }
-      }
-
-      var data = {
-        nombre: nombre, servicio: $('pfServicio').value, ciudad: $('pfCiudad').value,
-        cuadrilla: $('pfCuadrilla').value, contratista: $('pfContratista').value.trim(),
-        dias: dias, frecuenciaTipo: frecTipo, diasMensual: diasMensual,
-        costoTipo: $('pfCostoTipo').value, costoMonto: Number($('pfCostoMonto').value) || 0,
-        visitasMes: Number($('pfVisitasMes').value) || 0, estado: $('pfEstado').value,
-        gate: $('pfGate').value.trim(), dump: $('pfDump').value.trim(), notas: $('pfNotas').value.trim()
-      };
-
-      var p = estado.param ? propDe(estado.param) : null;
-      if (p) { Object.assign(p, data); save(); toast('✅ Propiedad actualizada'); verPropiedad(p.id); }
-      else {
-        var pre = PREFIJO[$('pfCiudad').value] || 'GEN';
-        var max = 0; props.forEach(function (x) { var m = new RegExp('^' + pre + '-(\\d+)$').exec(x.id); if (m) max = Math.max(max, +m[1]); });
-        var np = Object.assign({ id: pre + '-' + String(max + 1).padStart(3, '0'), fecha: fechaISO(new Date()) }, data);
-        props.push(np); save(); toast('✅ Propiedad creada (' + np.id + ')'); verPropiedad(np.id);
-      }
+  // Preparamos los datos para Supabase (en inglés)
+  var data = {
+    name: nombre, 
+    service: $('pfServicio').value, 
+    city: $('pfCiudad').value,
+    crew_id: crews.find(c => c.nombre === $('pfCuadrilla').value)?.id || null,
+    contractor: $('pfContratista').value.trim(),
+    days: dias, 
+    frequency_type: frecTipo, 
+    days_monthly: frecRegla ? frecRegla.split(',') : [],
+    cycle: $('pfCiclo').value,
+    cost_type: $('pfCostoTipo').value,
+    cost_amount: Number($('pfCostoMonto').value)||0,
+    visits_month: Number($('pfVisitasMes').value)||0,
+    status: $('pfEstado').value,
+    gate: $('pfGate').value.trim(),
+    dump: $('pfDump').value.trim(),
+    notas: $('pfNotas').value.trim()
+  };
+    
+  var p = estado.param ? propDe(estado.param) : null;
+  toggleLoading(true);
+  
+  if(p){
+    // ACTUALIZAR EN SUPABASE
+    const { error } = await supabase.from('properties').update(data).eq('id', p.id);
+    toggleLoading(false);
+    if(error){ toast('❌ Error al actualizar'); console.error(error); }
+    else {
+      // Actualizamos memoria local
+      Object.assign(p, {
+        nombre: data.name, service: data.service, ciudad: data.city,
+        cuadrilla: $('pfCuadrilla').value, contractor: data.contractor, dias: data.days,
+        frecuenciaTipo: data.frequency_type, diasMensual: data.days_monthly,
+        ciclo: data.cycle, costoTipo: data.cost_type, costoMonto: data.cost_amount,
+        visitasMes: data.visits_month, estado: data.status, gate: data.gate, dump: data.dump, notas: data.notas
+      });
+      toast('✅ Propiedad actualizada en la nube');
+      verPropiedad(p.id);
     }
+  } else {
+    // CREAR EN SUPABASE
+    data.code = PREFIJO[$('pfCiudad').value] || 'GEN';
+    const { data: newProp, error } = await supabase.from('properties').insert(data).select().single();
+    toggleLoading(false);
+    if(error){ toast('❌ Error al crear'); console.error(error); }
+    else {
+      var np = {
+        id: newProp.id, code: newProp.code, nombre: newProp.name, service: newProp.service, ciudad: newProp.city,
+        cuadrilla: crews.find(c=>c.id===newProp.crew_id)?.nombre || '', contractor: newProp.contractor,
+        dias: newProp.days, frecuenciaTipo: newProp.frequency_type, diasMensual: newProp.days_monthly || [],
+        ciclo: newProp.cycle, pattern: newProp.pattern, costoTipo: newProp.cost_type, costoMonto: newProp.cost_amount,
+        visitasMes: newProp.visits_month, estado: newProp.status, fecha: newProp.fecha, gate: newProp.gate, dump: newProp.dump, notas: newProp.notas
+      };
+      props.push(np);
+      toast('✅ Propiedad creada en la nube ('+np.code+')');
+      verPropiedad(np.id);
+    }
+  }
+}
 
     /* ===== RECONSTRUÍDO: CUADRILLAS ===== */
     function vistaCuadrillas() {
@@ -2197,68 +2235,81 @@ function load(){
     }
 
     /* ===== MODAL ASIGNAR CUADRILLA RÁPIDO ===== */
-    var ASIGN_PROP = null;
-    var ASIGN_TIPO = 'perm'; // 'perm' o 'hoy'
+/* ===== MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR) ===== */
+var ASIGN_PROP = null, ASIGN_TIPO = 'perm', ASIGN_CREW_ID = null, ASIGN_FECHA = null;
 
-    function abrirAsignarCua(propId, fechaIso) {
-      if (!rolOro()) return;
-      var p = propDe(propId);
-      if (!p) return;
-      ASIGN_PROP = propId;
-      // Si viene del calendario usa esa fecha, si no, usa hoy
-      ASIGN_FECHA = fechaIso || fechaISO(new Date());
+function abrirAsignarCua(propId, fechaIso){
+  if(!rolOro()) return;
+  var p = propDe(propId);
+  if(!p) return;
+  ASIGN_PROP = propId;
+  ASIGN_FECHA = fechaIso || fechaISO(new Date());
+  ASIGN_CREW_ID = p.crew_id || null;
+  $('asignProp').textContent = p.nombre + ' · ' + p.id;
+  $('asignSearch').value = '';
+  filtrarCuadrillasAsign();
+  toggleAsignTipo('perm');
+  $('modalAsignarCua').classList.remove('hidden');
+}
 
-      $('asignProp').textContent = p.nombre + ' · ' + p.id;
-      var opts = '<option value="">— Sin asignar —</option>' + crews.map(function (c) {
-        return '<option value="' + esc(c.nombre) + '"' + (p.cuadrilla === c.nombre ? ' selected' : '') + '>' + esc(c.nombre) + '</option>';
-      }).join('');
-      $('asignSel').innerHTML = opts;
-      toggleAsignTipo('perm'); // Siempre arranca en permanente
-      $('modalAsignarCua').classList.remove('hidden');
-    }
+function filtrarCuadrillasAsign(){
+  var q = ($('asignSearch').value || '').toLowerCase();
+  var html = '<button onclick="seleccionarAsignCrew(null, \'— Sin asignar —\')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-400 italic">— Sin asignar —</button>';
+  var filtered = crews.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q) >= 0;
+  });
+  html += filtered.map(function(c){
+    var s = crewStyle(c.nombre);
+    var active = (c.id === ASIGN_CREW_ID) ? 'bg-sky-50 font-bold text-sky-700' : 'hover:bg-sky-50 text-slate-600';
+    return '<button onclick="seleccionarAsignCrew(\''+c.id+'\', \''+esc(c.nombre)+'\')" class="w-full text-left px-3 py-2 '+active+' flex items-center gap-2 transition">'+
+           '<span class="w-2 h-2 rounded-full '+s.dot+'"></span>'+esc(c.nombre)+'</button>';
+  }).join('');
+  if(filtered.length === 0) html += '<p class="text-center text-slate-400 text-sm p-3">Sin resultados</p>';
+  $('asignList').innerHTML = html;
+}
 
-    function toggleAsignTipo(tipo) {
-      ASIGN_TIPO = tipo;
-      var isPerm = tipo === 'perm';
-      $('btnAsignPerm').className = 'py-2 rounded-lg font-bold text-sm transition ' + (isPerm ? 'bg-white text-sky-600 shadow' : 'text-slate-500');
-      $('btnAsignHoy').className = 'py-2 rounded-lg font-bold text-sm transition ' + (!isPerm ? 'bg-white text-sky-600 shadow' : 'text-slate-500');
-      $('asignPermBox').classList.toggle('hidden', !isPerm);
-      $('asignHoyBox').classList.toggle('hidden', isPerm);
-    }
+function seleccionarAsignCrew(crewId, crewName){
+  ASIGN_CREW_ID = crewId;
+  filtrarCuadrillasAsign(); // Actualiza el resaltado
+  toast('✅ Seleccionada: '+crewName);
+}
 
-    function cerrarAsignarCua() { $('modalAsignarCua').classList.add('hidden'); ASIGN_PROP = null; }
+function toggleAsignTipo(tipo){
+  ASIGN_TIPO = tipo;
+  var isPerm = tipo === 'perm';
+  $('btnAsignPerm').className = 'py-2 rounded-lg font-bold text-sm transition '+(isPerm?'bg-white text-sky-600 shadow':'text-slate-500');
+  $('btnAsignHoy').className = 'py-2 rounded-lg font-bold text-sm transition '+(!isPerm?'bg-white text-sky-600 shadow':'text-slate-500');
+  $('asignPermBox').classList.toggle('hidden', !isPerm);
+  $('asignHoyBox').classList.toggle('hidden', isPerm);
+}
+
+function cerrarAsignarCua(){ $('modalAsignarCua').classList.add('hidden'); ASIGN_PROP = null; }
 
 async function guardarAsignarCua(){
   if(!ASIGN_PROP) return cerrarAsignarCua();
   var p = propDe(ASIGN_PROP);
   if(!p) return cerrarAsignarCua();
-  var cuaName = $('asignSel').value;
 
   if(ASIGN_TIPO === 'perm'){
-    // Buscamos el ID real (UUID) de la cuadrilla seleccionada
-    var c = crews.find(function(x){ return x.nombre === cuaName; });
-    var crewId = c ? c.id : null;
-
     toggleLoading(true);
-    // Guardamos directamente en la tabla properties de Supabase
-    const { error } = await supabase.from('properties').update({ crew_id: crewId }).eq('id', p.id);
+    // Guardamos el ID de la cuadrilla en Supabase
+    const { error } = await supabase.from('properties').update({ crew_id: ASIGN_CREW_ID }).eq('id', p.id);
     toggleLoading(false);
     
     if(error){
       toast('❌ Error al guardar en la nube');
       console.error(error);
     } else {
-      // Actualizamos la memoria local de la web
-      p.cuadrilla = cuaName;
-      p.crew_id = crewId;
+      // Actualizamos la memoria local
+      p.crew_id = ASIGN_CREW_ID;
+      p.cuadrilla = crews.find(c => c.id === ASIGN_CREW_ID)?.nombre || '';
       toast('✅ Cuadrilla guardada en la nube');
     }
   } else {
-    // La lógica de "Solo por hoy" requerirá guardar en la tabla journeys, 
-    // lo dejamos para el siguiente paso de roles.
+    if(!ASIGN_CREW_ID){ toast('⚠️ Selecciona una cuadrilla para hoy'); return; }
+    // Aquí va la lógica de jornadas, la dejamos para el siguiente paso
     toast('⏳ La asignación por hoy se habilitará pronto');
   }
-  
   cerrarAsignarCua();
   renderApp();
 }
@@ -2343,23 +2394,21 @@ async function guardarAsignarCua(){
       $('modalDel').classList.remove('hidden');
     }
     function cerrarDel() { $('modalDel').classList.add('hidden'); DEL = null; }
-    function confirmarDel() {
-      if (!DEL) return cerrarDel();
-      var t = DEL.tipo, id = DEL.id;
-      if (t === 'prop') {
-        props = props.filter(function (p) { return p.id !== id; });
-        servicios = servicios.filter(function (s) { return s.propId !== id; });
-        jornadas.forEach(function (j) { j.items = j.items.filter(function (i) { return i.propId !== id; }); });
-        toast('🗑️ Propiedad eliminada'); ir('propiedades');
-      } else if (t === 'crew') {
-        crews = crews.filter(function (c) { return c.nombre !== id; });
-        toast('🗑️ Cuadrilla eliminada'); ir('cuadrillas');
-      } else if (t === 'jornada') {
-        jornadas = jornadas.filter(function (j) { return j.id !== id; });
-        toast('🗑️ Jornada eliminada'); ir('rutas');
-      }
-      cerrarDel(); save();
-    }
+async function confirmarDel(){
+  if(!DEL)return cerrarDel();
+  var t=DEL.tipo,id=DEL.id;
+  
+  if(t==='prop'){
+    toggleLoading(true);
+    const { error } = await supabase.from('properties').delete().eq('id', id);
+    toggleLoading(false);
+    if(error) return toast('❌ Error al eliminar');
+    props = props.filter(function(p){return p.id!==id;});
+    toast('🗑️ Propiedad eliminada de la nube');
+    ir('propiedades');
+  }
+  cerrarDel();
+}
 
     /* ===== RECONSTRUÍDO: REPORTES ===== */
     function setRepF(k, v) { estado.repFiltros[k] = v; renderApp(); }

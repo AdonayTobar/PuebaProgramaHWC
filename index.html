@@ -1164,119 +1164,127 @@ function load(){
 
     /* ================= VISTA CALENDARIO ================= */
     /* ================= VISTA CALENDARIO ================= */
-    function vistaCalendario() {
-      var meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      var mes = estado.calMes, ano = estado.calAno;
-      var primerDia = new Date(ano, mes, 1);
-      var ultimoDia = new Date(ano, mes + 1, 0);
-      var startDay = (primerDia.getDay() + 6) % 7; // 0=Lunes
-      var daysInMonth = ultimoDia.getDate();
-      var hoy = fechaISO(new Date());
+function vistaCalendario() {
+  var meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var mes = estado.calMes, ano = estado.calAno;
+  var primerDia = new Date(ano, mes, 1);
+  var ultimoDia = new Date(ano, mes + 1, 0);
+  var startDay = (primerDia.getDay() + 6) % 7; // 0=Lunes
+  var daysInMonth = ultimoDia.getDate();
+  var hoy = fechaISO(new Date());
 
-      var html = '<div class="anim space-y-4">'
-        + crumb([{ t: 'Inicio', fn: "ir('dashboard')" }, { t: 'Calendario' }])
-        + '<div class="flex items-center justify-between gap-3 flex-wrap">'
-        + '<div><h1 class="text-2xl lg:text-3xl font-extrabold capitalize">' + meses[mes] + ' ' + ano + '</h1>'
-        + '<p class="text-slate-500 text-sm mt-1">Programación automática de propiedades</p></div>'
-        + '<div class="flex gap-2">'
-        + '<button onclick="cambiarMes(-1)" class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center transition active:scale-95">←</button>'
-        + '<button onclick="cambiarMes(1)" class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center transition active:scale-95">→</button>'
-        + '</div></div>';
+  var html = '<div class="anim space-y-4">'
+    + crumb([{ t: 'Inicio', fn: "ir('dashboard')" }, { t: 'Calendario' }])
+    + '<div class="flex items-center justify-between gap-3 flex-wrap">'
+    + '<div><h1 class="text-2xl lg:text-3xl font-extrabold capitalize">' + meses[mes] + ' ' + ano + '</h1>'
+    + '<p class="text-slate-500 text-sm mt-1">Programación automática de propiedades</p></div>'
+    + '<div class="flex gap-2">'
+    + '<button onclick="cambiarMes(-1)" class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center transition active:scale-95">←</button>'
+    + '<button onclick="cambiarMes(1)" class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center transition active:scale-95">→</button>'
+    + '</div></div>';
 
-      html += '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4">';
-      // Cabecera días de la semana
-      html += '<div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">' + DIAS.map(function (d) {
-        return '<span class="text-[11px] sm:text-xs font-bold text-slate-400">' + d[1] + '</span>';
-      }).join('') + '</div>';
+  html += '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4">';
+  // Cabecera días de la semana
+  html += '<div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">' + DIAS.map(function (d) {
+    return '<span class="text-[11px] sm:text-xs font-bold text-slate-400">' + d[1] + '</span>';
+  }).join('') + '</div>';
 
-      // Cuadrícula de días
-      html += '<div class="grid grid-cols-7 gap-1 sm:gap-2">';
-      for (var i = 0; i < startDay; i++) {
-        html += '<div class="h-16 sm:h-24 bg-slate-50 rounded-lg"></div>';
-      }
-      for (var d = 1; d <= daysInMonth; d++) {
-        var iso = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-        var propsHoy = props.filter(function (p) { return tieneServicioEseDia(p, iso); });
-        var isSel = estado.calDiaSel === iso;
-        var isHoy = iso === hoy;
+  // Cuadrícula de días
+  html += '<div class="grid grid-cols-7 gap-1 sm:gap-2">';
+  for (var i = 0; i < startDay; i++) {
+    html += '<div class="h-16 sm:h-24 bg-slate-50 rounded-lg"></div>';
+  }
+  for (var d = 1; d <= daysInMonth; d++) {
+    var iso = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    var propsHoy = props.filter(function (p) { return tieneServicioEseDia(p, iso); });
+    var isSel = estado.calDiaSel === iso;
+    var isHoy = iso === hoy;
 
-        html += '<button onclick="seleccionarDiaCal(\'' + iso + '\')" class="h-16 sm:h-24 rounded-lg border p-1 flex flex-col items-start transition text-left ' + (isSel ? 'border-sky-500 bg-sky-50 ring-2 ring-sky-200' : (isHoy ? 'border-sky-200 bg-white' : 'border-slate-100 hover:border-sky-300 bg-white')) + '">';
-        html += '<span class="text-[11px] sm:text-sm font-bold ' + (isHoy ? 'text-sky-600' : 'text-slate-700') + ' ' + (isHoy ? 'bg-sky-100 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full' : '') + '">' + d + '</span>';
+    html += '<button onclick="seleccionarDiaCal(\'' + iso + '\')" class="h-16 sm:h-24 rounded-lg border p-1 flex flex-col items-start transition text-left ' + (isSel ? 'border-sky-500 bg-sky-50 ring-2 ring-sky-200' : (isHoy ? 'border-sky-200 bg-white' : 'border-slate-100 hover:border-sky-300 bg-white')) + '">';
+    html += '<span class="text-[11px] sm:text-sm font-bold ' + (isHoy ? 'text-sky-600' : 'text-slate-700') + ' ' + (isHoy ? 'bg-sky-100 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full' : '') + '">' + d + '</span>';
 
-        // Puntos de colores
-        if (propsHoy.length > 0) {
-          html += '<div class="flex flex-wrap gap-0.5 mt-auto mb-0.5 w-full justify-center sm:justify-start">';
-          propsHoy.slice(0, 5).forEach(function (p) {
-            var s = p.cuadrilla ? crewStyle(p.cuadrilla) : { dot: 'bg-rose-500' }; // Rojo si no tiene cuadrilla
-            html += '<span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ' + s.dot + '" title="' + esc(p.nombre) + '"></span>';
-          });
-          if (propsHoy.length > 5) html += '<span class="text-[8px] sm:text-[10px] text-slate-400 font-bold ml-0.5">+' + (propsHoy.length - 5) + '</span>';
-          html += '</div>';
-        }
-        html += '</button>';
-      }
-      html += '</div></div>';
-
-      // Lista de propiedades del día seleccionado
-      if (estado.calDiaSel) {
-        var diaSel = estado.calDiaSel;
-        var propsSel = props.filter(function (p) { return tieneServicioEseDia(p, diaSel); });
-
-        // Botones de Vista (Todas / Por Cuadrilla)
-        var btnTodas = estado.calVista !== 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
-        var btnCuad = estado.calVista === 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
-
-        html += '<div id="listaDia" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">';
-        html += '<div class="flex items-center justify-between gap-3 flex-wrap mb-4">';
-        html += '<h3 class="font-extrabold capitalize flex items-center gap-2 text-lg">📅 ' + fmtDiaFecha(diaSel) + ' <span class="text-slate-400 font-medium text-sm">(' + propsSel.length + ' propiedades)</span></h3>';
-        html += '<div class="flex gap-1 bg-slate-100 p-1 rounded-xl">';
-        html += '<button onclick="cambiarVistaCal(\'todas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnTodas + '">Todas</button>';
-        html += '<button onclick="cambiarVistaCal(\'cuadrillas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnCuad + '">Por Cuadrilla</button>';
-        html += '</div></div>';
-
-        if (propsSel.length === 0) {
-          html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades programadas para este día.</p>';
-        } else {
-          if (estado.calVista === 'cuadrillas') {
-            // AGRUPAR POR CUADRILLA
-            var grupos = {};
-            propsSel.forEach(function (p) {
-              var c = p.cuadrilla || '⚠️ Sin asignar';
-              if (!grupos[c]) grupos[c] = [];
-              grupos[c].push(p);
-            });
-
-            // Ordenar: Sin asignar al final
-            var keys = Object.keys(grupos).sort(function (a, b) {
-              if (a === '⚠️ Sin asignar') return 1;
-              if (b === '⚠️ Sin asignar') return -1;
-              return a < b ? -1 : 1;
-            });
-
-            keys.forEach(function (c) {
-              var sinAsignar = c === '⚠️ Sin asignar';
-              if (sinAsignar) {
-                html += '<div class="mb-6 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50 p-4">';
-                html += '<h4 class="font-extrabold text-rose-700 mb-3 flex items-center gap-2">⚠️ Sin cuadrilla asignada <span class="text-rose-400 font-medium text-xs">(' + grupos[c].length + ')</span></h4>';
-              } else {
-                html += '<div class="mb-6">';
-                html += '<div class="flex items-center gap-2 mb-3">' + chipCuad(c) + '<span class="text-xs font-bold text-slate-400">(' + grupos[c].length + ')</span></div>';
-              }
-              html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
-              html += '</div>';
-            });
-          } else {
-            // VISTA TODAS (Original)
-            html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
-          }
-        }
-        html += '</div>';
-      } else {
-        html += '<p class="text-center text-sm text-slate-400 mt-4">👆 Toca un día en el calendario para ver las propiedades programadas.</p>';
-      }
-
-      return html + '</div>';
+    // Puntos de colores
+    if (propsHoy.length > 0) {
+      html += '<div class="flex flex-wrap gap-0.5 mt-auto mb-0.5 w-full justify-center sm:justify-start">';
+      propsHoy.slice(0, 5).forEach(function (p) {
+        var s = p.cuadrilla ? crewStyle(p.cuadrilla) : { dot: 'bg-rose-500' }; // Rojo si no tiene cuadrilla
+        html += '<span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ' + s.dot + '" title="' + esc(p.nombre) + '"></span>';
+      });
+      if (propsHoy.length > 5) html += '<span class="text-[8px] sm:text-[10px] text-slate-400 font-bold ml-0.5">+' + (propsHoy.length - 5) + '</span>';
+      html += '</div>';
     }
+    html += '</button>';
+  }
+  html += '</div></div>';
+
+  // Lista de propiedades del día seleccionado
+  if (estado.calDiaSel) {
+    var diaSel = estado.calDiaSel;
+    var propsSel = props.filter(function (p) { return tieneServicioEseDia(p, diaSel); });
+
+    // Botones de Vista (Todas / Por Cuadrilla)
+    var btnTodas = estado.calVista !== 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
+    var btnCuad = estado.calVista === 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
+
+    html += '<div id="listaDia" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">';
+    html += '<div class="flex items-center justify-between gap-3 flex-wrap mb-4">';
+    html += '<h3 class="font-extrabold capitalize flex items-center gap-2 text-lg">📅 ' + fmtDiaFecha(diaSel) + ' <span class="text-slate-400 font-medium text-sm">(' + propsSel.length + ' propiedades)</span></h3>';
+    html += '<div class="flex gap-1 bg-slate-100 p-1 rounded-xl">';
+    html += '<button onclick="cambiarVistaCal(\'todas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnTodas + '">Todas</button>';
+    html += '<button onclick="cambiarVistaCal(\'cuadrillas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnCuad + '">Por Cuadrilla</button>';
+    html += '</div></div>';
+
+    if (propsSel.length === 0) {
+      html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades programadas para este día.</p>';
+    } else {
+      if (estado.calVista === 'cuadrillas') {
+        // AGRUPAR POR CUADRILLA
+        var grupos = {};
+        propsSel.forEach(function (p) {
+          var c = p.cuadrilla || '⚠️ Sin asignar';
+          if (!grupos[c]) grupos[c] = [];
+          grupos[c].push(p);
+        });
+
+        // Ordenar: Sin asignar al final
+        var keys = Object.keys(grupos).sort(function (a, b) {
+          if (a === '⚠️ Sin asignar') return 1;
+          if (b === '⚠️ Sin asignar') return -1;
+          return a < b ? -1 : 1;
+        });
+
+        keys.forEach(function (c) {
+          var sinAsignar = c === '⚠️ Sin asignar';
+          if (sinAsignar) {
+            // ALERTA ROJA: Sin asignar (Abierto por defecto)
+            html += '<details class="mb-4 border-2 border-dashed border-rose-300 rounded-2xl overflow-hidden bg-rose-50" open>';
+            html += '<summary class="p-4 font-extrabold text-rose-700 flex items-center gap-2 cursor-pointer hover:bg-rose-100 transition list-none">';
+            html += '⚠️ Sin cuadrilla asignada <span class="text-rose-400 font-medium text-xs">(' + grupos[c].length + ')</span>';
+            html += '<span class="ml-auto text-rose-300 text-sm">▼ clic para minimizar</span></summary>';
+            html += '<div class="p-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
+            html += '</details>';
+          } else {
+            // CUADRILLAS NORMALES (Abiertas por defecto)
+            html += '<details class="mb-4 border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white" open>';
+            html += '<summary class="p-4 font-bold flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition border-b border-slate-100 list-none">';
+            html += chipCuad(c) + '<span class="text-xs font-bold text-slate-400">(' + grupos[c].length + ')</span>';
+            html += '<span class="ml-auto text-slate-300 text-sm">▼ clic para minimizar</span></summary>';
+            html += '<div class="p-4 bg-slate-50 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
+            html += '</details>';
+          }
+        });
+      } else {
+        // VISTA TODAS (Original)
+        html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
+      }
+    }
+    html += '</div>';
+  } else {
+    html += '<p class="text-center text-sm text-slate-400 mt-4">👆 Toca un día en el calendario para ver las propiedades programadas.</p>';
+  }
+
+  return html + '</div>';
+}
 
     // NUEVA FUNCIÓN: Cambiar entre vistaTodas y vistaCuadrillas
     function cambiarVistaCal(vista) {

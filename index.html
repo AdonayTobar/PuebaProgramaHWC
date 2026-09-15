@@ -744,25 +744,40 @@ async function fetchAll(table, selectQuery) {
 
 // FUNCIÓN PRINCIPAL DE CARGA
 async function cargarDatosSupabase() {
-  // 1. Cargar Cuadrillas
+  const PAGE_SIZE = 1000;
+  // Helper para saltar el límite
+  async function fetchAll(table, selectQuery) {
+    let allData = []; let start = 0;
+    while (true) {
+      const { data, error } = await supabase.from(table).select(selectQuery).range(start, start + PAGE_SIZE - 1);
+      if (error) { console.error("Error fetching " + table + ":", error); return []; }
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      start += PAGE_SIZE;
+    }
+    return allData;
+  }
+
+  // 1. Cuadrillas
   const crewsData = await fetchAll('crews', '*');
   crews = (crewsData || []).map(function(c){
     return { id: c.id, nombre: c.name, ciudad: c.city, color: c.color, responsable: c.responsable, telefono: c.telefono, notas: c.notas };
   });
 
-  // 2. Cargar Propiedades (Hacemos un JOIN para traer el nombre de la cuadrilla)
-  const propsData = await fetchAll('properties', '*, crews(name)');
+  // 2. Propiedades (Sin JOIN de SQL, lo haremos en JS para que no falle)
+  const propsData = await fetchAll('properties', '*');
   props = (propsData || []).map(function(p){
     return {
       id: p.id, code: p.code, nombre: p.name, service: p.service, ciudad: p.city,
-      cuadrilla: p.crews ? p.crews.name : '', contractor: p.contractor, dias: p.days,
+      cuadrilla: crews.find(c => c.id === p.crew_id)?.nombre || '', // <--- CRUCE LOCAL SEGURO
+      contractor: p.contractor, dias: p.days,
       frecuenciaTipo: p.frequency_type, diasMensual: p.days_monthly || [], ciclo: p.cycle,
       pattern: p.pattern, costoTipo: p.cost_type, costoMonto: p.cost_amount, visitasMes: p.visits_month,
       estado: p.status, fecha: p.fecha, gate: p.gate, dump: p.dump, notas: p.notas
     };
   });
 
-  // 3. Cargar Jornadas e Items
+  // 3. Jornadas e Items
   const jornadasData = await fetchAll('journeys', '*, journey_items(*)');
   jornadas = (jornadasData || []).map(function(j){
     return {
@@ -776,7 +791,7 @@ async function cargarDatosSupabase() {
     };
   });
 
-  // 4. Cargar Servicios (Historial)
+  // 4. Servicios
   const servsData = await fetchAll('services', '*');
   servicios = (servsData || []).map(function(s){
     return {

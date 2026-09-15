@@ -657,7 +657,9 @@ var estado={vista:'dashboard',param:null,sidebar:false,
   calAno: new Date().getFullYear(),
   calDiaSel: null,
   calVista: 'todas',
-  calBusqueda: '', // NUEVO: Guarda el texto del buscador del calendario
+  calBusqueda: '',
+  propCalMes: new Date().getMonth(), // NUEVO: Mes del mini-calendario
+  propCalAno: new Date().getFullYear(), // NUEVO: Año del mini-calendario
   filtros:{q:'',ciudad:'',servicio:'',cuadrilla:'',estado:''},orden:'ciudad',
   repFiltros:{periodo:'hoy',cuadrilla:'',estadoF:'',lectura:'pendientes'},
   rutaFiltros:{periodo:'semana',cuadrilla:''},
@@ -773,8 +775,15 @@ async function cargarDatosSupabase() {
       fechaFin: j.fecha_fin, nombre: j.name, notas: j.notas, creadaPor: j.created_by,
       creadaPorRol: j.created_by_role, ts: j.ts ? j.ts : Date.parse(j.created_at),
       items: (j.journey_items || []).map(function(it){
-        return { propId: it.property_id, estado: it.status, servId: it.service_id,
-                 pospFecha: it.posp_fecha, pospMotivo: it.posp_motivo, pospPor: it.posp_por };
+        return { 
+          id: it.id, // <--- AQUÍ ESTÁ EL CAMBIO
+          propId: it.property_id, 
+          estado: it.status, 
+          servId: it.service_id,
+          pospFecha: it.posp_fecha, 
+          pospMotivo: it.posp_motivo, 
+          pospPor: it.posp_por 
+        };
       })
     };
   });
@@ -946,6 +955,58 @@ function proximosServicios(p, n) {
       }
       return false;
     }
+
+    // NUEVO: Verifica si una propiedad tiene servicio en una fecha (por regla o por jornada)
+function propTieneServicio(p, iso) {
+  if (tieneServicioEseDia(p, iso)) return true;
+  for (var i = 0; i < jornadas.length; i++) {
+    if (jornadas[i].fecha === iso && jornadas[i].items.some(it => it.propId === p.id)) return true;
+  }
+  return false;
+}
+
+// NUEVO: Cambiar mes del mini-calendario en detalle de propiedad
+function cambiarPropMes(dir) {
+  var nuevoMes = estado.propCalMes + dir;
+  if (nuevoMes < 0) { nuevoMes = 11; estado.propCalAno--; }
+  else if (nuevoMes > 11) { nuevoMes = 0; estado.propCalAno++; }
+  estado.propCalMes = nuevoMes;
+  renderApp();
+}
+
+// NUEVO: Eliminar servicio futuro (item de jornada)
+async function eliminarServicioFuturo(propId, iso) {
+  if (!rolAdmin()) return;
+  if (!confirm('¿Eliminar este servicio programado para el ' + iso + '?')) return;
+  
+  // Buscamos la jornada y el item
+  var journeyToDelete = null;
+  var itemToDelete = null;
+  
+  for (var i = 0; i < jornadas.length; i++) {
+    if (jornadas[i].fecha === iso) {
+      var item = jornadas[i].items.find(it => it.propId === propId);
+      if (item) {
+        journeyToDelete = jornadas[i];
+        itemToDelete = item;
+        break;
+      }
+    }
+  }
+  
+  if (journeyToDelete && itemToDelete && itemToDelete.id) {
+    toggleLoading(true);
+    await supabase.from('journey_items').delete().eq('id', itemToDelete.id);
+    toggleLoading(false);
+    // Actualizamos memoria local
+    journeyToDelete.items = journeyToDelete.items.filter(it => it.propId !== propId);
+    toast('🗑️ Servicio futuro eliminado de la nube');
+    renderApp();
+  } else {
+    toast('ℹ️ No se encontró el servicio futuro en la base de datos');
+  }
+}
+    
 
     /* ================= NAVEGACIÓN E HISTORIAL ================= */
     var TITULOS = { dashboard: 'Dashboard', rutas: 'Jornadas', ruta_detalle: 'Jornada', ruta_form: 'Jornada', calendario: 'Calendario', propiedades: 'Propiedades', propiedad_detalle: 'Propiedad', propiedad_form: 'Propiedad', cuadrillas: 'Cuadrillas', cuadrilla_detalle: 'Cuadrilla', cuadrilla_form: 'Cuadrilla', reportes: 'Reportes', exportar: 'Exportar' };
@@ -1171,7 +1232,7 @@ function vistaCalendario() {
   var mes = estado.calMes, ano = estado.calAno;
   var primerDia = new Date(ano, mes, 1);
   var ultimoDia = new Date(ano, mes + 1, 0);
-  var startDay = (primerDia.getDay() + 6) % 7; // 0=Lunes
+  var startDay = (primerDia.getDay() + 6) % 7;
   var daysInMonth = ultimoDia.getDate();
   var hoy = fechaISO(new Date());
 
@@ -1186,20 +1247,14 @@ function vistaCalendario() {
     + '</div></div>';
 
   html += '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4">';
-  // Cabecera días de la semana
   html += '<div class="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center">' + DIAS.map(function (d) {
     return '<span class="text-[11px] sm:text-xs font-bold text-slate-400">' + d[1] + '</span>';
   }).join('') + '</div>';
 
-  // Cuadrícula de días
   html += '<div class="grid grid-cols-7 gap-1 sm:gap-2">';
-  for (var i = 0; i < startDay; i++) {
-    html += '<div class="h-16 sm:h-24 bg-slate-50 rounded-lg"></div>';
-  }
+  for (var i = 0; i < startDay; i++) html += '<div class="h-16 sm:h-24 bg-slate-50 rounded-lg"></div>';
   for (var d = 1; d <= daysInMonth; d++) {
     var iso = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    
-    // NUEVA LÓGICA: Propiedades por regla base O por jornada especial
     var propsHoy = props.filter(function (p) { 
       if (tieneServicioEseDia(p, iso)) return true;
       for (var i = 0; i < jornadas.length; i++) {
@@ -1207,14 +1262,12 @@ function vistaCalendario() {
       }
       return false;
     });
-    
     var isSel = estado.calDiaSel === iso;
     var isHoy = iso === hoy;
 
     html += '<button onclick="seleccionarDiaCal(\'' + iso + '\')" class="h-16 sm:h-24 rounded-lg border p-1 flex flex-col items-start transition text-left ' + (isSel ? 'border-sky-500 bg-sky-50 ring-2 ring-sky-200' : (isHoy ? 'border-sky-200 bg-white' : 'border-slate-100 hover:border-sky-300 bg-white')) + '">';
     html += '<span class="text-[11px] sm:text-sm font-bold ' + (isHoy ? 'text-sky-600' : 'text-slate-700') + ' ' + (isHoy ? 'bg-sky-100 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full' : '') + '">' + d + '</span>';
 
-    // Puntos de colores
     if (propsHoy.length > 0) {
       html += '<div class="flex flex-wrap gap-0.5 mt-auto mb-0.5 w-full justify-center sm:justify-start">';
       propsHoy.slice(0, 5).forEach(function (p) {
@@ -1228,92 +1281,27 @@ function vistaCalendario() {
   }
   html += '</div></div>';
 
-  // Lista de propiedades del día seleccionado
   if (estado.calDiaSel) {
     var diaSel = estado.calDiaSel;
-    
-    // NUEVA LÓGICA: Filtrar propiedades del día (Regla base O Jornada)
-    var propsSel = props.filter(function (p) {
-      if (tieneServicioEseDia(p, diaSel)) return true;
-      for (var i = 0; i < jornadas.length; i++) {
-        if (jornadas[i].fecha === diaSel && jornadas[i].items.some(it => it.propId === p.id)) return true;
-      }
-      return false;
-    });
-
-    // BUSCADOR DINÁMICO
-    var busq = (estado.calBusqueda || '').toLowerCase();
-    if (busq) {
-      propsSel = propsSel.filter(function(p) {
-        return (p.nombre && p.nombre.toLowerCase().indexOf(busq) >= 0) ||
-               (p.ciudad && p.ciudad.toLowerCase().indexOf(busq) >= 0) ||
-               (p.cuadrilla && p.cuadrilla.toLowerCase().indexOf(busq) >= 0);
-      });
-    }
-
-    // Botones de Vista (Todas / Por Cuadrilla / Sin Asignar)
     var btnTodas = estado.calVista !== 'cuadrillas' && estado.calVista !== 'sinasignar' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
     var btnCuad = estado.calVista === 'cuadrillas' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
     var btnSin = estado.calVista === 'sinasignar' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
 
     html += '<div id="listaDia" class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mt-4">';
     html += '<div class="flex items-center justify-between gap-3 flex-wrap mb-4">';
-    html += '<h3 class="font-extrabold capitalize flex items-center gap-2 text-lg">📅 ' + fmtDiaFecha(diaSel) + ' <span class="text-slate-400 font-medium text-sm">(' + propsSel.length + ' propiedades)</span></h3>';
+    html += '<h3 class="font-extrabold capitalize flex items-center gap-2 text-lg">📅 ' + fmtDiaFecha(diaSel) + '</h3>';
     html += '<div class="flex gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">';
     html += '<button onclick="cambiarVistaCal(\'todas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnTodas + '">Todas</button>';
     html += '<button onclick="cambiarVistaCal(\'cuadrillas\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnCuad + '">Por Cuadrilla</button>';
     html += '<button onclick="cambiarVistaCal(\'sinasignar\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnSin + '">⚠️ Sin Asignar</button>';
     html += '</div></div>';
 
-    // NUEVO: Caja del buscador
-    html += '<input id="calBuscador" type="text" oninput="estado.calBusqueda=this.value;renderApp();" placeholder="🔍 Buscar por nombre, ciudad o cuadrilla..." class="inp mb-4" value="'+esc(estado.calBusqueda)+'">';
-
-    if (propsSel.length === 0) {
-      html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades que coincidan con la búsqueda.</p>';
-    } else {
-      if (estado.calVista === 'sinasignar') {
-        var propsSin = propsSel.filter(function(p){ return !p.cuadrilla; });
-        if (propsSin.length === 0) {
-          html += '<p class="text-sm text-emerald-600 p-4 text-center bg-emerald-50 rounded-xl">¡Genial! Todas las propiedades de este día tienen cuadrilla asignada.</p>';
-        } else {
-          html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSin.map(propCard).join('') + '</div>';
-        }
-      } else if (estado.calVista === 'cuadrillas') {
-        var grupos = {};
-        propsSel.forEach(function (p) {
-          var c = p.cuadrilla || '⚠️ Sin asignar';
-          if (!grupos[c]) grupos[c] = [];
-          grupos[c].push(p);
-        });
-
-        var keys = Object.keys(grupos).sort(function (a, b) {
-          if (a === '⚠️ Sin asignar') return 1;
-          if (b === '⚠️ Sin asignar') return -1;
-          return a < b ? -1 : 1;
-        });
-
-        keys.forEach(function (c) {
-          var sinAsignar = c === '⚠️ Sin asignar';
-          if (sinAsignar) {
-            html += '<details class="mb-4 border-2 border-dashed border-rose-300 rounded-2xl overflow-hidden bg-rose-50" open>';
-            html += '<summary class="p-4 font-extrabold text-rose-700 flex items-center gap-2 cursor-pointer hover:bg-rose-100 transition list-none">';
-            html += '⚠️ Sin cuadrilla asignada <span class="text-rose-400 font-medium text-xs">(' + grupos[c].length + ')</span>';
-            html += '<span class="ml-auto text-rose-300 text-sm">▼ clic para minimizar</span></summary>';
-            html += '<div class="p-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
-            html += '</details>';
-          } else {
-            html += '<details class="mb-4 border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white" open>';
-            html += '<summary class="p-4 font-bold flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition border-b border-slate-100 list-none">';
-            html += chipCuad(c) + '<span class="text-xs font-bold text-slate-400">(' + grupos[c].length + ')</span>';
-            html += '<span class="ml-auto text-slate-300 text-sm">▼ clic para minimizar</span></summary>';
-            html += '<div class="p-4 bg-slate-50 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
-            html += '</details>';
-          }
-        });
-      } else {
-        html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
-      }
-    }
+    // NUEVO: Buscador que no recarga la página
+    html += '<input type="text" oninput="buscarEnCalendario(this.value)" placeholder="🔍 Buscar por nombre, ciudad o cuadrilla..." class="inp mb-4" value="'+esc(estado.calBusqueda)+'">';
+    
+    // NUEVO: Contenedor de la lista que se actualiza solo
+    html += '<div id="calListaProps">'+generarHtmlListaCalendario()+'</div>';
+    
     html += '</div>';
   } else {
     html += '<p class="text-center text-sm text-slate-400 mt-4">👆 Toca un día en el calendario para ver las propiedades programadas.</p>';
@@ -1322,16 +1310,92 @@ function vistaCalendario() {
   return html + '</div>';
 }
 
-    // NUEVA FUNCIÓN: Cambiar entre vistaTodas y vistaCuadrillas
-    function cambiarVistaCal(vista) {
-      estado.calVista = vista;
-      renderApp();
-      // Volver a hacer scroll a la lista
-      setTimeout(function () {
-        var el = document.getElementById('listaDia');
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
+    // NUEVAS FUNCIONES PARA BÚSQUEDA SIN RECARGAR
+function buscarEnCalendario(val) {
+  estado.calBusqueda = val;
+  if ($('calListaProps')) {
+    $('calListaProps').innerHTML = generarHtmlListaCalendario();
+  }
+}
+
+function generarHtmlListaCalendario() {
+  var diaSel = estado.calDiaSel;
+  var propsSel = props.filter(function (p) {
+    if (tieneServicioEseDia(p, diaSel)) return true;
+    for (var i = 0; i < jornadas.length; i++) {
+      if (jornadas[i].fecha === diaSel && jornadas[i].items.some(it => it.propId === p.id)) return true;
     }
+    return false;
+  });
+
+  var busq = (estado.calBusqueda || '').toLowerCase();
+  if (busq) {
+    propsSel = propsSel.filter(function(p) {
+      return (p.nombre && p.nombre.toLowerCase().indexOf(busq) >= 0) ||
+             (p.ciudad && p.ciudad.toLowerCase().indexOf(busq) >= 0) ||
+             (p.cuadrilla && p.cuadrilla.toLowerCase().indexOf(busq) >= 0);
+    });
+  }
+
+  if (propsSel.length === 0) {
+    return '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades que coincidan con la búsqueda.</p>';
+  }
+
+  var html = '';
+  if (estado.calVista === 'sinasignar') {
+    var propsSin = propsSel.filter(function(p){ return !p.cuadrilla; });
+    if (propsSin.length === 0) {
+      return '<p class="text-sm text-emerald-600 p-4 text-center bg-emerald-50 rounded-xl">¡Genial! Todas las propiedades de este día tienen cuadrilla asignada.</p>';
+    } else {
+      html = '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSin.map(propCard).join('') + '</div>';
+    }
+  } else if (estado.calVista === 'cuadrillas') {
+    var grupos = {};
+    propsSel.forEach(function (p) {
+      var c = p.cuadrilla || '⚠️ Sin asignar';
+      if (!grupos[c]) grupos[c] = [];
+      grupos[c].push(p);
+    });
+
+    var keys = Object.keys(grupos).sort(function (a, b) {
+      if (a === '⚠️ Sin asignar') return 1;
+      if (b === '⚠️ Sin asignar') return -1;
+      return a < b ? -1 : 1;
+    });
+
+    keys.forEach(function (c) {
+      var sinAsignar = c === '⚠️ Sin asignar';
+      if (sinAsignar) {
+        html += '<details class="mb-4 border-2 border-dashed border-rose-300 rounded-2xl overflow-hidden bg-rose-50" open>';
+        html += '<summary class="p-4 font-extrabold text-rose-700 flex items-center gap-2 cursor-pointer hover:bg-rose-100 transition list-none">';
+        html += '⚠️ Sin cuadrilla asignada <span class="text-rose-400 font-medium text-xs">(' + grupos[c].length + ')</span>';
+        html += '<span class="ml-auto text-rose-300 text-sm">▼ clic para minimizar</span></summary>';
+        html += '<div class="p-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
+        html += '</details>';
+      } else {
+        html += '<details class="mb-4 border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white" open>';
+        html += '<summary class="p-4 font-bold flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition border-b border-slate-100 list-none">';
+        html += chipCuad(c) + '<span class="text-xs font-bold text-slate-400">(' + grupos[c].length + ')</span>';
+        html += '<span class="ml-auto text-slate-300 text-sm">▼ clic para minimizar</span></summary>';
+        html += '<div class="p-4 bg-slate-50 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
+        html += '</details>';
+      }
+    });
+  } else {
+    html = '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
+  }
+  return html;
+}
+
+    // NUEVA FUNCIÓN: Cambiar entre vistaTodas y vistaCuadrillas
+function cambiarVistaCal(vista){
+  estado.calVista = vista;
+  if ($('calListaProps')) {
+    $('calListaProps').innerHTML = generarHtmlListaCalendario();
+  } else {
+    renderApp();
+  }
+}
 
     function cambiarMes(dir) {
       var nuevoMes = estado.calMes + dir;
@@ -1541,81 +1605,112 @@ function vistaCalendario() {
         + '<p class="text-xs font-bold text-slate-500">' + fmtMon(calcMensual(p)) + '/mes</p></div>'
         + '</div>';
     }
-    function vistaPropDetalle() {
-      var p = propDe(estado.param);
-      if (!p) return '<div class="p-10 text-center"><p class="text-4xl mb-2">🚫</p><p class="font-bold">Propiedad no encontrada</p><button onclick="ir(\'propiedades\')" class="mt-3 text-sm font-semibold text-sky-600 hover:underline">Volver a propiedades</button></div>';
+function vistaPropDetalle(){
+  var p=propDe(estado.param);
+  if(!p)return '<div class="p-10 text-center"><p class="text-4xl mb-2">🚫</p><p class="font-bold">Propiedad no encontrada</p><button onclick="ir(\'propiedades\')" class="mt-3 text-sm font-semibold text-sky-600 hover:underline">Volver a propiedades</button></div>';
+  
+  var prev = estado.history[estado.history.length - 1] || {};
+  var crumbs = [{t:'Inicio', fn:"ir('dashboard')"}];
+  if (prev.refVista === 'ruta_detalle' && prev.refParam) {
+    var j = jornadaDe(prev.refParam);
+    crumbs.push({t:'Jornadas', fn:"ir('rutas')"});
+    if (j) crumbs.push({t: j.nombre || ('Jornada '+j.cuadrilla), fn:"verRuta('"+j.id+"')"});
+  } else if (prev.refVista === 'cuadrilla_detalle' && prev.refParam) {
+    var c = crewDe(prev.refParam);
+    crumbs.push({t:'Cuadrillas', fn:"ir('cuadrillas')"});
+    if (c) crumbs.push({t: c.nombre, fn:"verCuadrilla('"+c.nombre+"')"});
+  } else {
+    crumbs.push({t:'Propiedades', fn:"ir('propiedades')"});
+  }
+  crumbs.push({t: p.nombre});
+  
+  var svcs=serviciosDe(p.id);
+  var prox=proximosServicios(p,10);
+  var puedeOp=rolAdmin()||p.cuadrilla===miCua();
+  var asignBtn = rolOro() ? '<button onclick="abrirAsignarCua(\''+p.id+'\')" class="border border-slate-200 hover:border-sky-400 text-sm font-bold px-4 py-2.5 rounded-xl transition" title="Asignar/Cambiar cuadrilla">⚙️ Cuadrilla</button>' : '';
+  
+  function info(label,val){return '<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">'+label+'</p><p class="text-sm font-semibold mt-0.5">'+val+'</p></div>';}
+  var hist=svcs.length?svcs.map(function(s){
+    return '<div class="border border-slate-100 rounded-xl p-3 hover:border-sky-200 transition">'
+      +'<div class="flex items-start justify-between gap-2"><p class="text-sm font-bold">'+fmtFecha(s.fecha)+'</p>'+badgeServicio(s.estado)+'</div>'
+      +'<div class="flex items-center gap-2 mt-1 flex-wrap">'+chipCuad(s.cuadrilla)+'<span class="text-[11px] text-slate-400">'+horaDe(s.ts)+' · '+esc(s.por)+'</span></div>'
+      +(s.notas?'<p class="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 mt-2">💬 '+esc(s.notas)+'</p>':'')
+      +'</div>';}).join('')
+    :'<p class="text-sm text-slate-400 p-4">Sin servicios registrados todavía.</p>';
+    
+  // NUEVO: Lista de próximos servicios con botón de eliminar
+  var proxHtml=prox.length?prox.map(function(d){
+    var iso=fechaISO(d);
+    var l='LMXJVSD'[(d.getDay()+6)%7];
+    return '<div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100 mb-2 justify-between">'
+      +'<div class="flex items-center gap-3">'
+      +'<span class="w-6 h-6 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">'+l+'</span>'
+      +'<span class="text-sm font-semibold capitalize">'+fmtFechaCorta(d)+'</span>'
+      +'</div>'
+      +(rolAdmin()?'<button onclick="eliminarServicioFuturo(\''+p.id+'\',\''+iso+'\')" class="text-rose-400 hover:text-rose-600 text-sm font-bold p-1 rounded">🗑️</button>':'')
+      +'</div>';
+  }).join(''):'<p class="text-sm text-slate-400 p-4">Define días o ciclo para calcular próximos.</p>';
 
-      // NUEVO: Detectamos de dónde vino el clic para mostrar la miga de pan correcta
-      var prev = estado.history[estado.history.length - 1] || {};
-      var crumbs = [{ t: 'Inicio', fn: "ir('dashboard')" }];
-
-      if (prev.refVista === 'ruta_detalle' && prev.refParam) {
-        var j = jornadaDe(prev.refParam);
-        crumbs.push({ t: 'Jornadas', fn: "ir('rutas')" });
-        if (j) crumbs.push({ t: j.nombre || ('Jornada ' + j.cuadrilla), fn: "verRuta('" + j.id + "')" });
-      } else if (prev.refVista === 'cuadrilla_detalle' && prev.refParam) {
-        var c = crewDe(prev.refParam);
-        crumbs.push({ t: 'Cuadrillas', fn: "ir('cuadrillas')" });
-        if (c) crumbs.push({ t: c.nombre, fn: "verCuadrilla('" + c.nombre + "')" });
-      } else {
-        crumbs.push({ t: 'Propiedades', fn: "ir('propiedades')" });
-      }
-      crumbs.push({ t: p.nombre });
-
-      var svcs = serviciosDe(p.id);
-      var prox = proximosServicios(p, 4);
-      var puedeOp = rolAdmin() || p.cuadrilla === miCua();
-
-      // NUEVO: Botón de asignación rápida para Admin Oro
-      var asignBtn = rolOro() ? '<button onclick="abrirAsignarCua(\'' + p.id + '\')" class="border border-slate-200 hover:border-sky-400 text-sm font-bold px-4 py-2.5 rounded-xl transition" title="Asignar/Cambiar cuadrilla">⚙️ Cuadrilla</button>' : '';
-
-      function info(label, val) { return '<div><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">' + label + '</p><p class="text-sm font-semibold mt-0.5">' + val + '</p></div>'; }
-      var hist = svcs.length ? svcs.map(function (s) {
-        return '<div class="border border-slate-100 rounded-xl p-3 hover:border-sky-200 transition">'
-          + '<div class="flex items-start justify-between gap-2"><p class="text-sm font-bold">' + fmtFecha(s.fecha) + '</p>' + badgeServicio(s.estado) + '</div>'
-          + '<div class="flex items-center gap-2 mt-1 flex-wrap">' + chipCuad(s.cuadrilla) + '<span class="text-[11px] text-slate-400">' + horaDe(s.ts) + ' · ' + esc(s.por) + '</span></div>'
-          + (s.notas ? '<p class="text-xs text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 mt-2">💬 ' + esc(s.notas) + '</p>' : '')
-          + '</div>';
-      }).join('')
-        : '<p class="text-sm text-slate-400 p-4">Sin servicios registrados todavía.</p>';
-      var proxHtml = prox.length ? prox.map(function (d) {
-        var l = 'LMXJVSD'[(d.getDay() + 6) % 7];
-        return '<div class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-100 mb-2">'
-          + '<span class="w-6 h-6 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">' + l + '</span>'
-          + '<span class="text-sm font-semibold capitalize">' + fmtFechaCorta(d) + '</span></div>';
-      }).join('')
-        : '<p class="text-sm text-slate-400 p-4">Define días o ciclo para calcular próximos.</p>';
-
-      return '<div class="anim space-y-5">'
-        + crumb(crumbs) // ARREGLADO: Usa la miga de pan inteligente que creamos arriba
-        + '<div class="flex items-start justify-between gap-3 flex-wrap">'
-        + '<div class="min-w-0"><h1 class="text-xl lg:text-2xl font-extrabold leading-tight">' + esc(p.nombre) + '</h1>'
-        + '<p class="text-xs text-slate-400 mt-0.5">' + esc(p.id) + ' · Alta ' + fmtFecha(p.fecha) + '</p></div>'
-        + badgeEstado(p.estado) + '</div>'
-        + '<div class="flex items-center gap-2 flex-wrap">' + chipServ(p.servicio) + chipCuad(p.cuadrilla, true) + (codigos(p) ? '<span class="text-xs text-slate-500">' + codigos(p) + '</span>' : '') + '</div>'
-        + '<div class="flex flex-wrap gap-2">'
-        + (puedeOp ? '<button onclick="abrirServModal(\'' + p.id + '\',null)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow transition active:scale-95">✅ Registrar servicio</button>' : '')
-        + (rolOro() ? '<button onclick="formPropiedad(\'' + p.id + '\')" class="border border-slate-200 hover:border-sky-400 text-sm font-bold px-4 py-2.5 rounded-xl transition">✏️ Editar</button>'
-          + '<button onclick="togglePropEstado(\'' + p.id + '\')" class="border border-slate-200 hover:border-amber-400 text-sm font-bold px-4 py-2.5 rounded-xl transition">' + (p.estado === 'Activa' ? '⏸️ Suspender' : '▶️ Reactivar') + '</button>'
-          + '<button onclick="abrirDel(\'prop\',\'' + p.id + '\')" class="border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-bold px-4 py-2.5 rounded-xl transition">🗑</button>' : '')
-        + asignBtn // NUEVO: Botón de engranaje añadido a la fila de botones
-        + (rolAdmin() ? '<button onclick="irExportar(\'prop\',\'' + p.id + '\')" class="border border-slate-200 hover:border-emerald-400 text-sm font-bold px-4 py-2.5 rounded-xl transition" title="Exportar servicios">⬇️</button>' : '')
-        + '</div>'
-        + '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">'
-        + info('Ciudad', esc(p.ciudad))
-        + info('Contratista', esc(p.contratista || '—'))
-        + info('Ciclo', esc(p.ciclo) + (p.patron ? ' · ' + esc(p.patron) : ''))
-        + info('Costo mensual est.', '<span class="text-emerald-600">' + fmtMon(calcMensual(p)) + '</span>')
-        + info('Costo', esc(p.costoTipo || '—') + (p.costoMonto ? ' · ' + fmtMon(p.costoMonto) : ''))
-        + info('Visitas/mes', esc(p.visitasMes || '—'))
-        + '<div class="col-span-2"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Días programados</p><div class="flex gap-1">' + diasBadges(p) + '</div></div>'
-        + '</div>'
-        + (p.notas ? '<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-800">📝 ' + esc(p.notas) + '</div>' : '')
-        + '<div class="grid lg:grid-cols-3 gap-5">'
-        + '<div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5"><h3 class="font-extrabold mb-3">🧾 Historial de servicios <span class="text-xs font-medium text-slate-400">(' + svcs.length + ')</span></h3><div class="space-y-2">' + hist + '</div></div>'
-        + '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5"><h3 class="font-extrabold mb-3">📅 Próximos servicios</h3>' + proxHtml + '</div>'
-        + '</div></div>';
-    }
+  // NUEVO: Mini Calendario de la propiedad
+  var pMeses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var pMes=estado.propCalMes, pAno=estado.propCalAno;
+  var pPrimerDia=new Date(pAno, pMes, 1);
+  var pUltimoDia=new Date(pAno, pMes+1, 0);
+  var pStartDay=(pPrimerDia.getDay()+6)%7;
+  var pDaysInMonth=pUltimoDia.getDate();
+  
+  var calHtml='<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5">';
+  calHtml+='<div class="flex items-center justify-between mb-3">';
+  calHtml+='<h3 class="font-extrabold text-sm">📅 Calendario</h3>';
+  calHtml+='<div class="flex items-center gap-2">';
+  calHtml+='<button onclick="cambiarPropMes(-1)" class="w-7 h-7 rounded-lg border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center text-xs">←</button>';
+  calHtml+='<span class="text-xs font-bold capitalize">'+pMeses[pMes]+' '+pAno+'</span>';
+  calHtml+='<button onclick="cambiarPropMes(1)" class="w-7 h-7 rounded-lg border border-slate-200 hover:bg-slate-50 font-bold flex items-center justify-center text-xs">→</button>';
+  calHtml+='</div></div>';
+  calHtml+='<div class="grid grid-cols-7 gap-1 text-center mb-1">';
+  DIAS.forEach(function(dd){ calHtml+='<span class="text-[10px] font-bold text-slate-400">'+dd[0]+'</span>'; });
+  calHtml+='</div>';
+  calHtml+='<div class="grid grid-cols-7 gap-1">';
+  for(var i=0;i<pStartDay;i++) calHtml+='<div class="h-7 bg-slate-50 rounded-md"></div>';
+  for(var pd=1; pd<=pDaysInMonth; pd++){
+    var pIso=pAno+'-'+String(pMes+1).padStart(2,'0')+'-'+String(pd).padStart(2,'0');
+    var hasServ=propTieneServicio(p, pIso);
+    calHtml+='<div class="h-7 flex items-center justify-center rounded-md text-[10px] font-bold '+(hasServ?'bg-sky-500 text-white shadow':'bg-slate-50 text-slate-500')+'">'+pd+'</div>';
+  }
+  calHtml+='</div></div>';
+  
+  return '<div class="anim space-y-5">'
+    +crumb(crumbs)
+    +'<div class="flex items-start justify-between gap-3 flex-wrap">'
+    +'<div class="min-w-0"><h1 class="text-xl lg:text-2xl font-extrabold leading-tight">'+esc(p.nombre)+'</h1>'
+    +'<p class="text-xs text-slate-400 mt-0.5">'+esc(p.id)+' · Alta '+fmtFecha(p.fecha)+'</p></div>'
+    +badgeEstado(p.estado)+'</div>'
+    +'<div class="flex items-center gap-2 flex-wrap">'+chipServ(p.servicio)+chipCuad(p.cuadrilla,true)+asignBtn+(codigos(p)?'<span class="text-xs text-slate-500">'+codigos(p)+'</span>':'')+'</div>'
+    +'<div class="flex flex-wrap gap-2">'
+    +(puedeOp?'<button onclick="abrirServModal(\''+p.id+'\',null)" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow transition active:scale-95">✅ Registrar servicio</button>':'')
+    +(rolOro()?'<button onclick="formPropiedad(\''+p.id+'\')" class="border border-slate-200 hover:border-sky-400 text-sm font-bold px-4 py-2.5 rounded-xl transition">✏️ Editar</button>'
+      +'<button onclick="togglePropEstado(\''+p.id+'\')" class="border border-slate-200 hover:border-amber-400 text-sm font-bold px-4 py-2.5 rounded-xl transition">'+(p.estado==='Activa'?'⏸️ Suspender':'▶️ Reactivar')+'</button>'
+      +'<button onclick="abrirDel(\'prop\',\''+p.id+'\')" class="border border-rose-200 text-rose-600 hover:bg-rose-50 text-sm font-bold px-4 py-2.5 rounded-xl transition">🗑</button>':'')
+    +(rolAdmin()?'<button onclick="irExportar(\'prop\',\''+p.id+'\')" class="border border-slate-200 hover:border-emerald-400 text-sm font-bold px-4 py-2.5 rounded-xl transition" title="Exportar servicios">⬇️</button>':'')
+    +'</div>'
+    +'<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">'
+    +info('Ciudad',esc(p.ciudad))
+    +info('Contratista',esc(p.contratista||'—'))
+    +info('Ciclo',esc(p.ciclo)+(p.patron?' · '+esc(p.patron):''))
+    +info('Costo mensual est.','<span class="text-emerald-600">'+fmtMon(calcMensual(p))+'</span>')
+    +info('Costo',esc(p.costoTipo||'—')+(p.costoMonto?' · '+fmtMon(p.costoMonto):''))
+    +info('Visitas/mes',esc(p.visitasMes||'—'))
+    +'<div class="col-span-2"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Días programados</p><div class="flex gap-1">'+diasBadges(p)+'</div></div>'
+    +'</div>'
+    +(p.notas?'<div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-sm text-amber-800">📝 '+esc(p.notas)+'</div>':'')
+    +'<div class="grid lg:grid-cols-3 gap-5">'
+    +'<div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5"><h3 class="font-extrabold mb-3">🧾 Historial de servicios <span class="text-xs font-medium text-slate-400">('+svcs.length+')</span></h3><div class="space-y-2">'+hist+'</div></div>'
+    +'<div class="space-y-5">'
+    +'<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5"><h3 class="font-extrabold mb-3">📅 Próximos servicios</h3>'+proxHtml+'</div>'
+    +calHtml
+    +'</div>'
+    +'</div></div>';
+}
 async function togglePropEstado(id){
   if(!rolOro())return;
   var p = propDe(id);if(!p)return;

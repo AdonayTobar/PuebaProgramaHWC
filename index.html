@@ -2213,43 +2213,40 @@ function load(){
 
     function cerrarAsignarCua() { $('modalAsignarCua').classList.add('hidden'); ASIGN_PROP = null; }
 
-    function guardarAsignarCua() {
-      if (!ASIGN_PROP) return cerrarAsignarCua();
-      var p = propDe(ASIGN_PROP);
-      if (!p) return cerrarAsignarCua();
-      var cua = $('asignSel').value;
+async function guardarAsignarCua(){
+  if(!ASIGN_PROP) return cerrarAsignarCua();
+  var p = propDe(ASIGN_PROP);
+  if(!p) return cerrarAsignarCua();
+  var cuaName = $('asignSel').value;
 
-      if (ASIGN_TIPO === 'perm') {
-        p.cuadrilla = cua;
-        toast('✅ Cuadrilla permanente actualizada');
-      } else {
-        if (!cua) { toast('⚠️ Selecciona una cuadrilla para hoy'); return; }
-        // Buscar si ya existe una jornada para esa cuadrilla y fecha
-        var j = jornadas.find(function (x) { return x.cuadrilla === cua && x.fecha === ASIGN_FECHA; });
-        if (!j) {
-          // Crear la jornada automática si no existe
-          var max = 0; jornadas.forEach(function (x) { var m = /^J-(\d+)$/.exec(x.id); if (m) max = Math.max(max, +m[1]); });
-          j = {
-            id: 'J-' + String(max + 1).padStart(4, '0'), cuadrilla: cua, fecha: ASIGN_FECHA, fechaFin: '',
-            nombre: 'Ruta ' + ASIGN_FECHA, notas: 'Generada desde asignación rápida',
-            creadaPor: USUARIO.nombre, creadaPorRol: USUARIO.rol, items: [], ts: Date.now()
-          };
-          jornadas.push(j);
-        }
-        // Agregar la propiedad a la jornada si no está ya
-        var existe = j.items.some(function (it) { return it.propId === p.id; });
-        if (!existe) {
-          j.items.push({ propId: p.id, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: '' });
-          toast('✅ Agregada a la jornada de ' + cua + ' para el ' + ASIGN_FECHA);
-        } else {
-          toast('ℹ️ Ya estaba en la jornada de esa fecha');
-        }
-      }
+  if(ASIGN_TIPO === 'perm'){
+    // Buscamos el ID real (UUID) de la cuadrilla seleccionada
+    var c = crews.find(function(x){ return x.nombre === cuaName; });
+    var crewId = c ? c.id : null;
 
-      save();
-      cerrarAsignarCua();
-      renderApp();
+    toggleLoading(true);
+    // Guardamos directamente en la tabla properties de Supabase
+    const { error } = await supabase.from('properties').update({ crew_id: crewId }).eq('id', p.id);
+    toggleLoading(false);
+    
+    if(error){
+      toast('❌ Error al guardar en la nube');
+      console.error(error);
+    } else {
+      // Actualizamos la memoria local de la web
+      p.cuadrilla = cuaName;
+      p.crew_id = crewId;
+      toast('✅ Cuadrilla guardada en la nube');
     }
+  } else {
+    // La lógica de "Solo por hoy" requerirá guardar en la tabla journeys, 
+    // lo dejamos para el siguiente paso de roles.
+    toast('⏳ La asignación por hoy se habilitará pronto');
+  }
+  
+  cerrarAsignarCua();
+  renderApp();
+}
 
     /* ===== VALIDACIÓN PARA ASIGNAR DESDE CUADRILLAS ===== */
     var CONFIRM_ASIGN = null;

@@ -886,24 +886,26 @@ function load(){
       arr.sort(function (a, b) { return a.fecha < b.fecha ? 1 : (a.fecha > b.fecha ? -1 : b.ts - a.ts); });
       return arr;
     }
-    function proximosServicios(p, n) {
-      n = n || 4; var res = [];
-      if (p.ciclo === 'Semanal' && p.dias) {
-        var d = new Date(); var g = 0;
-        while (res.length < n && g < 90) {
-          d.setDate(d.getDate() + 1); g++;
-          if (p.dias.indexOf('LMXJVSD'[(d.getDay() + 6) % 7]) >= 0) res.push(new Date(d));
-        }
-      } else if (p.ciclo === 'Mensual') {
-        var d2 = new Date(); d2.setDate(d2.getDate() + 14);
-        for (var j = 0; j < n; j++) { res.push(new Date(d2)); d2.setDate(d2.getDate() + 15); }
-      }
-      else {
-        var d3 = new Date(); d3.setMonth(d3.getMonth() + 1);
-        for (var k = 0; k < n; k++) { res.push(new Date(d3)); d3.setMonth(d3.getMonth() + 3); }
-      }
-      return res.slice(0, n);
+/* MOTOR INTELIGENTE: Calcula los próximos servicios usando el mismo calendario */
+function proximosServicios(p, n) {
+  n = n || 4;
+  var res = [];
+  var d = new Date();
+  var g = 0;
+  
+  // Buscamos en los próximos 365 días
+  while (res.length < n && g < 365) {
+    d.setDate(d.getDate() + 1);
+    g++;
+    var iso = fechaISO(d);
+    
+    // Usamos la misma función matemática que usa el calendario
+    if (tieneServicioEseDia(p, iso)) {
+      res.push(new Date(d));
     }
+  }
+  return res.slice(0, n);
+}
     function puedeVerJornada(j) { return rolAdmin() || (esTrabajador() && j.cuadrilla === miCua()); }
     function puedeEditarJornada(j) { return rolAdmin() || (esTrabajador() && j.creadaPorRol === 'Trabajador' && j.cuadrilla === miCua()); }
     function puedeOperarJornada(j) { return rolAdmin() || (esTrabajador() && j.cuadrilla === miCua()); }

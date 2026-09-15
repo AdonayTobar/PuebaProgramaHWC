@@ -726,87 +726,63 @@ function save(){
 }
 // NUEVA FUNCIÓN: Carga los datos directamente desde Supabase
 // NUEVA FUNCIÓN: Carga los datos directamente desde Supabase
+// FUNCIÓN AUXILIAR: Salta el límite de 1,000 filas de Supabase
+async function fetchAll(table, selectQuery) {
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let start = 0;
+  while (true) {
+    // Pide de 'start' a 'start + 1000'
+    const { data, error } = await supabase.from(table).select(selectQuery).range(start, start + PAGE_SIZE - 1);
+    if (error) { console.error("Error en " + table + ":", error); return []; }
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) break; // Si trajo menos de 1000, significa que ya no hay más
+    start += PAGE_SIZE;
+  }
+  return allData;
+}
+
+// FUNCIÓN PRINCIPAL DE CARGA
 async function cargarDatosSupabase() {
   // 1. Cargar Cuadrillas
-  const { data: crewsData, error: errorCrews } = await supabase.from('crews').select('*').limit(10000);
-  if (errorCrews) { console.error("Error crews:", errorCrews); return; }
-  
-  // Mapeamos los datos de la DB al formato en español que usa tu frontend
+  const crewsData = await fetchAll('crews', '*');
   crews = (crewsData || []).map(function(c){
     return { id: c.id, nombre: c.name, ciudad: c.city, color: c.color, responsable: c.responsable, telefono: c.telefono, notas: c.notas };
   });
 
   // 2. Cargar Propiedades (Hacemos un JOIN para traer el nombre de la cuadrilla)
-  const { data: propsData, error: errorProps } = await supabase.from('properties').select('*, crews(name)').limit(10000);
-  if (errorProps) { console.error("Error props:", errorProps); return; }
-  
+  const propsData = await fetchAll('properties', '*, crews(name)');
   props = (propsData || []).map(function(p){
     return {
-      id: p.id,
-      code: p.code,
-      nombre: p.name, // <-- TRADUCCIÓN
-      service: p.service,
-      ciudad: p.city, // <-- TRADUCCIÓN
-      cuadrilla: p.crews ? p.crews.name : '', // Si tiene cuadrilla, traemos el nombre
-      contractor: p.contractor,
-      dias: p.days,
-      frecuenciaTipo: p.frequency_type,
-      diasMensual: p.days_monthly || [],
-      ciclo: p.cycle, // <-- TRADUCCIÓN
-      pattern: p.pattern,
-      costoTipo: p.cost_type,
-      costoMonto: p.cost_amount,
-      visitasMes: p.visits_month,
-      estado: p.status, // <-- TRADUCCIÓN
-      fecha: p.fecha,
-      gate: p.gate,
-      dump: p.dump,
-      notas: p.notas
+      id: p.id, code: p.code, nombre: p.name, service: p.service, ciudad: p.city,
+      cuadrilla: p.crews ? p.crews.name : '', contractor: p.contractor, dias: p.days,
+      frecuenciaTipo: p.frequency_type, diasMensual: p.days_monthly || [], ciclo: p.cycle,
+      pattern: p.pattern, costoTipo: p.cost_type, costoMonto: p.cost_amount, visitasMes: p.visits_month,
+      estado: p.status, fecha: p.fecha, gate: p.gate, dump: p.dump, notas: p.notas
     };
   });
 
   // 3. Cargar Jornadas e Items
-  const { data: jornadasData, error: errorJornadas } = await supabase.from('journeys').select('*, journey_items(*)').limit(10000);
-  if (errorJornadas) { console.error("Error jornadas:", errorJornadas); return; }
-  
+  const jornadasData = await fetchAll('journeys', '*, journey_items(*)');
   jornadas = (jornadasData || []).map(function(j){
     return {
-      id: j.id,
-      cuadrilla: crews.find(c => c.id === j.crew_id)?.nombre || '',
-      fecha: j.fecha,
-      fechaFin: j.fecha_fin,
-      nombre: j.name, // <-- TRADUCCIÓN
-      notas: j.notas,
-      creadaPor: j.created_by,
-      creadaPorRol: j.created_by_role,
-      ts: j.ts ? j.ts : Date.parse(j.created_at),
+      id: j.id, cuadrilla: crews.find(c => c.id === j.crew_id)?.nombre || '', fecha: j.fecha,
+      fechaFin: j.fecha_fin, nombre: j.name, notas: j.notas, creadaPor: j.created_by,
+      creadaPorRol: j.created_by_role, ts: j.ts ? j.ts : Date.parse(j.created_at),
       items: (j.journey_items || []).map(function(it){
-        return {
-          propId: it.property_id,
-          estado: it.status,
-          servId: it.service_id,
-          pospFecha: it.posp_fecha,
-          pospMotivo: it.posp_motivo,
-          pospPor: it.posp_por
-        };
+        return { propId: it.property_id, estado: it.status, servId: it.service_id,
+                 pospFecha: it.posp_fecha, pospMotivo: it.posp_motivo, pospPor: it.posp_por };
       })
     };
   });
 
   // 4. Cargar Servicios (Historial)
-  const { data: servsData, error: errorServs } = await supabase.from('services').select('*').limit(10000);
-  if (errorServs) { console.error("Error services:", errorServs); return; }
-  
+  const servsData = await fetchAll('services', '*');
   servicios = (servsData || []).map(function(s){
     return {
-      id: s.id,
-      propId: s.property_id,
-      fecha: s.fecha,
-      estado: s.status,
-      cuadrilla: crews.find(c => c.id === s.crew_id)?.nombre || '',
-      notas: s.notas,
-      por: s.por,
-      ts: s.ts ? s.ts : Date.parse(s.created_at)
+      id: s.id, propId: s.property_id, fecha: s.fecha, estado: s.status,
+      cuadrilla: crews.find(c => c.id === s.crew_id)?.nombre || '', notas: s.notas,
+      por: s.por, ts: s.ts ? s.ts : Date.parse(s.created_at)
     };
   });
 }
@@ -2606,11 +2582,9 @@ function load(){
       // El listener de abajo se encargará de mostrar el login de nuevo
     }
 
-   // EL LISTENER: Solo para detectar cuando inicia o cierra sesión manualmente
+// Detectar cierre de sesión manual
 supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN') {
-    inicializarApp();
-  } else if (event === 'SIGNED_OUT') {
+  if (event === 'SIGNED_OUT') {
     $('loginOverlay').classList.remove('hidden');
     $('loadingOverlay').classList.add('hidden');
     $('contenido').innerHTML = '';

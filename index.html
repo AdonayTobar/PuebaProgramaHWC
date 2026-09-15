@@ -2238,14 +2238,22 @@ async function guardarServ(){
   var crewName = $('svCua').value;
   var crewObj = crews.find(c=>c.nombre===crewName);
   
-  var data = { property_id: p.id, fecha: f, estado: $('svEstado').value, crew_id: crewObj ? crewObj.id : null, notas: $('svNotas').value.trim(), por: USUARIO.nombre };
+  var data = { 
+    property_id: p.id, 
+    fecha: f, 
+    status: $('svEstado').value, // <--- AQUÍ ESTABA EL ERROR, AHORA DICE 'status'
+    crew_id: crewObj ? crewObj.id : null, 
+    notas: $('svNotas').value.trim(), 
+    por: USUARIO.nombre,
+    ts: Date.now() // Agregamos el timestamp
+  };
   
   toggleLoading(true);
   const { data: newServ, error } = await supabase.from('services').insert(data).select().single();
   toggleLoading(false);
   if(error) return toast('❌ Error al registrar servicio');
   
-  var sv = { id:newServ.id, propId:p.id, fecha:f, estado:newServ.estado, cuadrilla:crewName, notas:newServ.notas, por:USUARIO.nombre, ts:Date.now() };
+  var sv = { id:newServ.id, propId:p.id, fecha:f, estado:newServ.status, cuadrilla:crewName, notas:newServ.notas, por:USUARIO.nombre, ts:Date.now() };
   servicios.push(sv);
   
   if(SERV_JORN){

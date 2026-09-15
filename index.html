@@ -651,18 +651,17 @@
     var KEY = 'rutalimpia_v9';
     var props = [], crews = [], servicios = [], jornadas = [], leidos = {};
     var USUARIO = USUARIOS_DEMO[0];
-    var estado = {
-      vista: 'dashboard', param: null, sidebar: false,
-      history: [],
-      calMes: new Date().getMonth(),
-      calAno: new Date().getFullYear(),
-      calDiaSel: null,
-      calVista: 'todas', // NUEVO: 'todas' o 'cuadrillas'
-      filtros: { q: '', ciudad: '', servicio: '', cuadrilla: '', estado: '' }, orden: 'ciudad',
-      repFiltros: { periodo: 'hoy', cuadrilla: '', estadoF: '', lectura: 'pendientes' },
-      rutaFiltros: { periodo: 'semana', cuadrilla: '' },
-      exportar: { tipo: 'general', prop: '', cuad: '', desde: '', hasta: '' }
-    };
+var estado={vista:'dashboard',param:null,sidebar:false,
+  history: [],
+  calMes: new Date().getMonth(),
+  calAno: new Date().getFullYear(),
+  calDiaSel: null,
+  calVista: 'todas',
+  calBusqueda: '', // NUEVO: Guarda el texto del buscador del calendario
+  filtros:{q:'',ciudad:'',servicio:'',cuadrilla:'',estado:''},orden:'ciudad',
+  repFiltros:{periodo:'hoy',cuadrilla:'',estadoF:'',lectura:'pendientes'},
+  rutaFiltros:{periodo:'semana',cuadrilla:''},
+  exportar:{tipo:'general',prop:'',cuad:'',desde:'',hasta:''}};
     var DEL = null, SERV_ACT = null, SERV_JORN = null, POSP = null, AP_JORN = null;
 
     function seedProps() {
@@ -889,21 +888,21 @@ function load(){
     }
 /* MOTOR INTELIGENTE: Calcula los próximos servicios usando el mismo calendario */
 function proximosServicios(p, n) {
-  n = n || 4;
-  var res = [];
-  var d = new Date();
-  var g = 0;
-  
-  // Buscamos en los próximos 365 días
+  n = n || 4; var res = []; var d = new Date(); var g = 0;
   while (res.length < n && g < 365) {
-    d.setDate(d.getDate() + 1);
-    g++;
+    d.setDate(d.getDate() + 1); g++;
     var iso = fechaISO(d);
     
-    // Usamos la misma función matemática que usa el calendario
-    if (tieneServicioEseDia(p, iso)) {
-      res.push(new Date(d));
+    var hasService = tieneServicioEseDia(p, iso);
+    // Si no tiene regla base, revisamos si está en una jornada especial
+    if(!hasService) {
+      for (var i = 0; i < jornadas.length; i++) {
+        if (jornadas[i].fecha === iso && jornadas[i].items.some(it => it.propId === p.id)) {
+          hasService = true; break;
+        }
+      }
     }
+    if (hasService) res.push(new Date(d));
   }
   return res.slice(0, n);
 }
@@ -1199,7 +1198,16 @@ function vistaCalendario() {
   }
   for (var d = 1; d <= daysInMonth; d++) {
     var iso = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    var propsHoy = props.filter(function (p) { return tieneServicioEseDia(p, iso); });
+    
+    // NUEVA LÓGICA: Propiedades por regla base O por jornada especial
+    var propsHoy = props.filter(function (p) { 
+      if (tieneServicioEseDia(p, iso)) return true;
+      for (var i = 0; i < jornadas.length; i++) {
+        if (jornadas[i].fecha === iso && jornadas[i].items.some(it => it.propId === p.id)) return true;
+      }
+      return false;
+    });
+    
     var isSel = estado.calDiaSel === iso;
     var isHoy = iso === hoy;
 
@@ -1210,7 +1218,7 @@ function vistaCalendario() {
     if (propsHoy.length > 0) {
       html += '<div class="flex flex-wrap gap-0.5 mt-auto mb-0.5 w-full justify-center sm:justify-start">';
       propsHoy.slice(0, 5).forEach(function (p) {
-        var s = p.cuadrilla ? crewStyle(p.cuadrilla) : { dot: 'bg-rose-500' }; // Rojo si no tiene cuadrilla
+        var s = p.cuadrilla ? crewStyle(p.cuadrilla) : { dot: 'bg-rose-500' };
         html += '<span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ' + s.dot + '" title="' + esc(p.nombre) + '"></span>';
       });
       if (propsHoy.length > 5) html += '<span class="text-[8px] sm:text-[10px] text-slate-400 font-bold ml-0.5">+' + (propsHoy.length - 5) + '</span>';
@@ -1223,7 +1231,25 @@ function vistaCalendario() {
   // Lista de propiedades del día seleccionado
   if (estado.calDiaSel) {
     var diaSel = estado.calDiaSel;
-    var propsSel = props.filter(function (p) { return tieneServicioEseDia(p, diaSel); });
+    
+    // NUEVA LÓGICA: Filtrar propiedades del día (Regla base O Jornada)
+    var propsSel = props.filter(function (p) {
+      if (tieneServicioEseDia(p, diaSel)) return true;
+      for (var i = 0; i < jornadas.length; i++) {
+        if (jornadas[i].fecha === diaSel && jornadas[i].items.some(it => it.propId === p.id)) return true;
+      }
+      return false;
+    });
+
+    // BUSCADOR DINÁMICO
+    var busq = (estado.calBusqueda || '').toLowerCase();
+    if (busq) {
+      propsSel = propsSel.filter(function(p) {
+        return (p.nombre && p.nombre.toLowerCase().indexOf(busq) >= 0) ||
+               (p.ciudad && p.ciudad.toLowerCase().indexOf(busq) >= 0) ||
+               (p.cuadrilla && p.cuadrilla.toLowerCase().indexOf(busq) >= 0);
+      });
+    }
 
     // Botones de Vista (Todas / Por Cuadrilla / Sin Asignar)
     var btnTodas = estado.calVista !== 'cuadrillas' && estado.calVista !== 'sinasignar' ? 'bg-sky-600 text-white shadow' : 'bg-white text-slate-500 border border-slate-200';
@@ -1239,11 +1265,13 @@ function vistaCalendario() {
     html += '<button onclick="cambiarVistaCal(\'sinasignar\')" class="px-4 py-1.5 rounded-lg font-bold text-sm transition ' + btnSin + '">⚠️ Sin Asignar</button>';
     html += '</div></div>';
 
+    // NUEVO: Caja del buscador
+    html += '<input id="calBuscador" type="text" oninput="estado.calBusqueda=this.value;renderApp();" placeholder="🔍 Buscar por nombre, ciudad o cuadrilla..." class="inp mb-4" value="'+esc(estado.calBusqueda)+'">';
+
     if (propsSel.length === 0) {
-      html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades programadas para este día.</p>';
+      html += '<p class="text-sm text-slate-400 p-4 text-center">No hay propiedades que coincidan con la búsqueda.</p>';
     } else {
       if (estado.calVista === 'sinasignar') {
-        // VISTA SIN ASIGNAR
         var propsSin = propsSel.filter(function(p){ return !p.cuadrilla; });
         if (propsSin.length === 0) {
           html += '<p class="text-sm text-emerald-600 p-4 text-center bg-emerald-50 rounded-xl">¡Genial! Todas las propiedades de este día tienen cuadrilla asignada.</p>';
@@ -1251,7 +1279,6 @@ function vistaCalendario() {
           html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSin.map(propCard).join('') + '</div>';
         }
       } else if (estado.calVista === 'cuadrillas') {
-        // AGRUPAR POR CUADRILLA
         var grupos = {};
         propsSel.forEach(function (p) {
           var c = p.cuadrilla || '⚠️ Sin asignar';
@@ -1259,7 +1286,6 @@ function vistaCalendario() {
           grupos[c].push(p);
         });
 
-        // Ordenar: Sin asignar al final
         var keys = Object.keys(grupos).sort(function (a, b) {
           if (a === '⚠️ Sin asignar') return 1;
           if (b === '⚠️ Sin asignar') return -1;
@@ -1269,7 +1295,6 @@ function vistaCalendario() {
         keys.forEach(function (c) {
           var sinAsignar = c === '⚠️ Sin asignar';
           if (sinAsignar) {
-            // ALERTA ROJA: Sin asignar (Abierto por defecto)
             html += '<details class="mb-4 border-2 border-dashed border-rose-300 rounded-2xl overflow-hidden bg-rose-50" open>';
             html += '<summary class="p-4 font-extrabold text-rose-700 flex items-center gap-2 cursor-pointer hover:bg-rose-100 transition list-none">';
             html += '⚠️ Sin cuadrilla asignada <span class="text-rose-400 font-medium text-xs">(' + grupos[c].length + ')</span>';
@@ -1277,7 +1302,6 @@ function vistaCalendario() {
             html += '<div class="p-4 grid md:grid-cols-2 xl:grid-cols-3 gap-3">' + grupos[c].map(propCard).join('') + '</div>';
             html += '</details>';
           } else {
-            // CUADRILLAS NORMALES (Abiertas por defecto)
             html += '<details class="mb-4 border border-slate-200 rounded-2xl overflow-hidden shadow-sm bg-white" open>';
             html += '<summary class="p-4 font-bold flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition border-b border-slate-100 list-none">';
             html += chipCuad(c) + '<span class="text-xs font-bold text-slate-400">(' + grupos[c].length + ')</span>';
@@ -1287,7 +1311,6 @@ function vistaCalendario() {
           }
         });
       } else {
-        // VISTA TODAS
         html += '<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">' + propsSel.map(propCard).join('') + '</div>';
       }
     }

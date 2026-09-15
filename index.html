@@ -1083,8 +1083,11 @@ function load(){
         poblarSelects();
         renderListado();
       } else if (estado.vista === 'propiedad_form' && rolOro()) {
-        initDiasChecks(estado.param ? propDe(estado.param) : null);
-        recalc();
+        // Si la función existe, la ejecutamos para llenar los botones de días
+        if(typeof initDiasChecks === 'function') initDiasChecks(estado.param ? propDe(estado.param) : null);
+        if(typeof recalc === 'function') recalc();
+        // NUEVO: Cargar la lista del buscador de cuadrillas
+        if(typeof filtrarCuadrillasForm === 'function' && $('pfCuaSearch')) filtrarCuadrillasForm();
       }
 
       aplicarRol(); aplicarSidebar();
@@ -1585,82 +1588,111 @@ async function togglePropEstado(id){
     toast(p.estado==='Activa'?'✅ Propiedad reactivada':'⏸️ Propiedad suspendida');
   }
 }
-    function vistaPropForm() {
-      var p = estado.param ? propDe(estado.param) : null;
-      if (estado.param && !p) return '<div class="p-10 text-center"><p class="font-bold">Propiedad no encontrada</p></div>';
-      var ciudades = CIUDADES_BASE.map(function (c) { return '<option' + ((p ? p.ciudad : 'Austin') === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
-      var cuaOpts = '<option value="">— Sin asignar —</option>' + crews.map(function (c) { return '<option' + ((p ? p.cuadrilla : '') === c.nombre ? ' selected' : '') + '>' + esc(c.nombre) + '</option>'; }).join('');
+function vistaPropForm() {
+  var p = estado.param ? propDe(estado.param) : null;
+  if (estado.param && !p) return '<div class="p-10 text-center"><p class="font-bold">Propiedad no encontrada</p></div>';
+  var ciudades = CIUDADES_BASE.map(function (c) { return '<option' + ((p ? p.ciudad : 'Austin') === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
 
-      var frecTipo = p ? (p.frecuenciaTipo || 'Semanal') : 'Semanal';
+  // NUEVO: Variable para el buscador de cuadrilla
+  FORM_CREW_ID = p ? (p.crew_id || null) : null;
 
-      // NUEVO: Generamos los botones de la semana directamente aquí
-      var semanalHtml = DIAS.map(function (dd) {
-        var on = p ? hasDia(p, dd[0]) : false;
-        return '<label class="cursor-pointer select-none" title="' + dd[1] + '">' +
-          '<input type="checkbox" class="pfDia peer hidden" value="' + dd[0] + '" ' + (on ? 'checked' : '') + '>' +
-          '<span class="flex w-9 h-9 items-center justify-center rounded-full font-bold text-sm bg-slate-100 text-slate-400 peer-checked:bg-sky-500 peer-checked:text-white transition">' + dd[0] + '</span></label>';
-      }).join('');
+  var frecTipo = p ? (p.frecuenciaTipo || 'Semanal') : 'Semanal';
 
-      return '<div class="anim max-w-2xl space-y-4">'
-        + crumb([{ t: 'Inicio', fn: "ir('dashboard')" }, { t: 'Propiedades', fn: "ir('propiedades')" }, { t: p ? 'Editar: ' + p.nombre : 'Nueva propiedad' }])
-        + '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 sm:p-6 space-y-4">'
-        + '<h2 class="font-extrabold text-lg">' + (p ? '✏️ Editar propiedad' : '🏢 Nueva propiedad') + '</h2>'
-        + '<div><span class="lbl">Nombre / Dirección *</span><input id="pfNombre" value="' + esc(p ? p.nombre : '') + '" placeholder="Ej: 1200 W. Gray — Sweep" class="inp"></div>'
-        + '<div class="grid sm:grid-cols-2 gap-3">'
-        + '<div><span class="lbl">Tipo de servicio *</span><select id="pfServicio" class="inp bg-white"><option' + ((p ? p.servicio : 'Sweep') === 'Sweep' ? ' selected' : '') + '>Sweep</option><option' + ((p ? p.servicio : '') === 'Porter' ? ' selected' : '') + '>Porter</option></select></div>'
-        + '<div><span class="lbl">Ciudad *</span><select id="pfCiudad" class="inp bg-white">' + ciudades + '</select></div>'
-        + '<div><span class="lbl">Cuadrilla</span><select id="pfCuadrilla" class="inp bg-white">' + cuaOpts + '</select></div>'
-        + '<div><span class="lbl">Contratista</span><input id="pfContratista" value="' + esc(p ? p.contratista : '') + '" placeholder="Ej: HWC" class="inp"></div>'
-        + '</div>'
+  // Generamos los botones de la semana directamente aquí
+  var semanalHtml = DIAS.map(function (dd) {
+    var on = p ? hasDia(p, dd[0]) : false;
+    return '<label class="cursor-pointer select-none" title="' + dd[1] + '">' +
+      '<input type="checkbox" class="pfDia peer hidden" value="' + dd[0] + '" ' + (on ? 'checked' : '') + '>' +
+      '<span class="flex w-9 h-9 items-center justify-center rounded-full font-bold text-sm bg-slate-100 text-slate-400 peer-checked:bg-sky-500 peer-checked:text-white transition">' + dd[0] + '</span></label>';
+  }).join('');
 
-        // --- DISEÑO VISUAL DE FRECUENCIA ---
-        + '<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">'
-        + '<div class="flex gap-2 bg-white p-1 rounded-xl border border-slate-200">'
-        + '<button type="button" id="tabFrecSemanal" onclick="cambiarFrecuenciaTab(\'Semanal\')" class="flex-1 py-2 rounded-lg font-bold text-sm transition ' + (frecTipo === 'Semanal' ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:bg-slate-100') + '">Semanal</button>'
-        + '<button type="button" id="tabFrecMensual" onclick="cambiarFrecuenciaTab(\'Mensual\')" class="flex-1 py-2 rounded-lg font-bold text-sm transition ' + (frecTipo === 'Mensual' ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:bg-slate-100') + '">Mensual</button>'
-        + '</div>'
+  return '<div class="anim max-w-2xl space-y-4">'
+    + crumb([{ t: 'Inicio', fn: "ir('dashboard')" }, { t: 'Propiedades', fn: "ir('propiedades')" }, { t: p ? 'Editar: ' + p.nombre : 'Nueva propiedad' }])
+    + '<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 sm:p-6 space-y-4">'
+    + '<h2 class="font-extrabold text-lg">' + (p ? '✏️ Editar propiedad' : '🏢 Nueva propiedad') + '</h2>'
+    + '<div><span class="lbl">Nombre / Dirección *</span><input id="pfNombre" value="' + esc(p ? p.nombre : '') + '" placeholder="Ej: 1200 W. Gray — Sweep" class="inp"></div>'
+    + '<div class="grid sm:grid-cols-2 gap-3">'
+    + '<div><span class="lbl">Tipo de servicio *</span><select id="pfServicio" class="inp bg-white"><option' + ((p ? p.servicio : 'Sweep') === 'Sweep' ? ' selected' : '') + '>Sweep</option><option' + ((p ? p.servicio : '') === 'Porter' ? ' selected' : '') + '>Porter</option></select></div>'
+    + '<div><span class="lbl">Ciudad *</span><select id="pfCiudad" class="inp bg-white">' + ciudades + '</select></div>'
+    
+    // --- NUEVO BUSCADOR DE CUADRILLA ---
+    + '<div class="sm:col-span-2"><span class="lbl">Cuadrilla (Buscar y seleccionar)</span>'
+    + '<input id="pfCuaSearch" type="text" oninput="filtrarCuadrillasForm()" placeholder="🔍 Escribe el nombre..." class="inp mt-1">'
+    + '<div id="pfCuaList" class="mt-2 max-h-32 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100"></div></div>'
+    
+    + '<div><span class="lbl">Contratista</span><input id="pfContratista" value="' + esc(p ? p.contratista : '') + '" placeholder="Ej: HWC" class="inp"></div>'
+    + '</div>'
 
-        // Vista Semanal (Arreglada)
-        + '<div id="vistaFrecSemanal" class="' + (frecTipo === 'Semanal' ? '' : 'hidden') + '">'
-        + '<span class="lbl">Selecciona los días</span><div class="flex gap-1.5 mt-1 flex-wrap">' + semanalHtml + '</div></div>'
+    // --- DISEÑO VISUAL DE FRECUENCIA (Intacto) ---
+    + '<div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">'
+    + '<div class="flex gap-2 bg-white p-1 rounded-xl border border-slate-200">'
+    + '<button type="button" id="tabFrecSemanal" onclick="cambiarFrecuenciaTab(\'Semanal\')" class="flex-1 py-2 rounded-lg font-bold text-sm transition ' + (frecTipo === 'Semanal' ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:bg-slate-100') + '">Semanal</button>'
+    + '<button type="button" id="tabFrecMensual" onclick="cambiarFrecuenciaTab(\'Mensual\')" class="flex-1 py-2 rounded-lg font-bold text-sm transition ' + (frecTipo === 'Mensual' ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:bg-slate-100') + '">Mensual</button>'
+    + '</div>'
 
-        // Vista Mensual
-        + '<div id="vistaFrecMensual" class="' + (frecTipo === 'Mensual' ? '' : 'hidden') + '">'
-        + '<span class="lbl">Selecciona qué semanas del mes</span>'
-        + '<div class="mt-2 overflow-x-auto pb-1"><table class="w-full text-center border-separate" style="border-spacing: 4px;"><thead><tr>'
-        + '<th class="w-12"></th>' + DIAS.map(function (dd) { return '<th class="text-[11px] font-bold text-slate-400 w-10">' + dd[0] + '</th>'; }).join('') + '</tr></thead><tbody>'
-        + ['1er', '2do', '3er', '4to', 'Últ'].map(function (s) {
-          var val = s === 'Últ' ? 'U' : s.charAt(0);
-          return '<tr><td class="text-[11px] font-bold text-slate-400 text-right pr-2 align-middle">' + s + '</td>'
-            + DIAS.map(function (dd) {
-              var clave = val + '-' + dd[0];
-              var activo = p && p.diasMensual && p.diasMensual.indexOf(clave) >= 0;
-              return '<td><button type="button" data-val="' + clave + '" onclick="toggleMensualDia(this)" class="btn-mensual-dia w-10 h-10 rounded-xl font-bold text-sm transition ' + (activo ? 'bg-sky-500 text-white shadow' : 'bg-white text-slate-300 border border-slate-200 hover:border-sky-400') + '">' + dd[0] + '</button></td>';
-            }).join('') + '</tr>';
-        }).join('') + '</tbody></table></div>'
-        + '<p class="text-[11px] text-slate-500 mt-1">Ej: Para "2do y 4to Martes", marca los botones de la fila 2do y 4to bajo la columna M.</p>'
-        + '</div></div>'
-        // -----------------------------------------
+    // Vista Semanal (Arreglada)
+    + '<div id="vistaFrecSemanal" class="' + (frecTipo === 'Semanal' ? '' : 'hidden') + '">'
+    + '<span class="lbl">Selecciona los días</span><div class="flex gap-1.5 mt-1 flex-wrap">' + semanalHtml + '</div></div>'
 
-        + '<div class="grid sm:grid-cols-3 gap-3">'
-        + '<div><span class="lbl">Estado</span><select id="pfEstado" class="inp bg-white"><option' + ((p ? p.estado : 'Activa') === 'Activa' ? ' selected' : '') + '>Activa</option><option' + ((p ? p.estado : '') === 'Suspendida' ? ' selected' : '') + '>Suspendida</option></select></div>'
-        + '<div><span class="lbl">Costo tipo</span><select id="pfCostoTipo" onchange="recalc()" class="inp bg-white">'
-        + ['Por mes', 'Por semana', 'Por vez'].map(function (t) { return '<option' + ((p ? p.costoTipo : 'Por mes') === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>'
-        + '<div><span class="lbl">Monto ($)</span><input id="pfCostoMonto" type="number" min="0" step="1" value="' + esc(p ? p.costoMonto : '') + '" oninput="recalc()" class="inp"></div>'
-        + '<div><span class="lbl">Visitas/mes (si "Por vez")</span><input id="pfVisitasMes" type="number" min="0" step="1" value="' + esc(p ? p.visitasMes : '') + '" oninput="recalc()" class="inp"></div>'
-        + '</div>'
-        + '<p class="text-sm bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">💰 Costo mensual estimado: <b id="pfRecalc" class="text-emerald-700">$0</b></p>'
-        + '<div class="grid sm:grid-cols-2 gap-3">'
-        + '<div><span class="lbl">Gate code</span><input id="pfGate" value="' + esc(p ? p.gate : '') + '" placeholder="Ej: 7357" class="inp"></div>'
-        + '<div><span class="lbl">Dumpster code</span><input id="pfDump" value="' + esc(p ? p.dump : '') + '" class="inp"></div>'
-        + '</div>'
-        + '<div><span class="lbl">Notas</span><textarea id="pfNotas" rows="2" class="inp resize-none">' + esc(p ? p.notas : '') + '</textarea></div>'
-        + '<div class="flex flex-wrap justify-end gap-3 pt-1">'
-        + (p ? '<button onclick="abrirDel(\'prop\',\'' + p.id + '\')" class="mr-auto border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-sm px-4 py-2.5 rounded-xl transition">🗑 Eliminar</button>' : '')
-        + '<button onclick="p?verPropiedad(p.id):ir(\'propiedades\')" class="px-5 py-2.5 rounded-xl border border-slate-200 font-semibold text-sm hover:bg-slate-50 transition">Cancelar</button>'
-        + '<button onclick="guardarPropiedad()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition active:scale-95">💾 Guardar</button>'
-        + '</div></div></div>';
-    }
+    // Vista Mensual
+    + '<div id="vistaFrecMensual" class="' + (frecTipo === 'Mensual' ? '' : 'hidden') + '">'
+    + '<span class="lbl">Selecciona qué semanas del mes</span>'
+    + '<div class="mt-2 overflow-x-auto pb-1"><table class="w-full text-center border-separate" style="border-spacing: 4px;"><thead><tr>'
+    + '<th class="w-12"></th>' + DIAS.map(function (dd) { return '<th class="text-[11px] font-bold text-slate-400 w-10">' + dd[0] + '</th>'; }).join('') + '</tr></thead><tbody>'
+    + ['1er', '2do', '3er', '4to', 'Últ'].map(function (s) {
+      var val = s === 'Últ' ? 'U' : s.charAt(0);
+      return '<tr><td class="text-[11px] font-bold text-slate-400 text-right pr-2 align-middle">' + s + '</td>'
+        + DIAS.map(function (dd) {
+          var clave = val + '-' + dd[0];
+          var activo = p && p.diasMensual && p.diasMensual.indexOf(clave) >= 0;
+          return '<td><button type="button" data-val="' + clave + '" onclick="toggleMensualDia(this)" class="btn-mensual-dia w-10 h-10 rounded-xl font-bold text-sm transition ' + (activo ? 'bg-sky-500 text-white shadow' : 'bg-white text-slate-300 border border-slate-200 hover:border-sky-400') + '">' + dd[0] + '</button></td>';
+        }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>'
+    + '<p class="text-[11px] text-slate-500 mt-1">Ej: Para "2do y 4to Martes", marca los botones de la fila 2do y 4to bajo la columna M.</p>'
+    + '</div></div>'
+    // -----------------------------------------
+
+    + '<div class="grid sm:grid-cols-3 gap-3">'
+    + '<div><span class="lbl">Estado</span><select id="pfEstado" class="inp bg-white"><option' + ((p ? p.estado : 'Activa') === 'Activa' ? ' selected' : '') + '>Activa</option><option' + ((p ? p.estado : '') === 'Suspendida' ? ' selected' : '') + '>Suspendida</option></select></div>'
+    + '<div><span class="lbl">Costo tipo</span><select id="pfCostoTipo" onchange="recalc()" class="inp bg-white">'
+    + ['Por mes', 'Por semana', 'Por vez'].map(function (t) { return '<option' + ((p ? p.costoTipo : 'Por mes') === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>'
+    + '<div><span class="lbl">Monto ($)</span><input id="pfCostoMonto" type="number" min="0" step="1" value="' + esc(p ? p.costoMonto : '') + '" oninput="recalc()" class="inp"></div>'
+    + '<div><span class="lbl">Visitas/mes (si "Por vez")</span><input id="pfVisitasMes" type="number" min="0" step="1" value="' + esc(p ? p.visitasMes : '') + '" oninput="recalc()" class="inp"></div>'
+    + '</div>'
+    + '<p class="text-sm bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">💰 Costo mensual estimado: <b id="pfRecalc" class="text-emerald-700">$0</b></p>'
+    + '<div class="grid sm:grid-cols-2 gap-3">'
+    + '<div><span class="lbl">Gate code</span><input id="pfGate" value="' + esc(p ? p.gate : '') + '" placeholder="Ej: 7357" class="inp"></div>'
+    + '<div><span class="lbl">Dumpster code</span><input id="pfDump" value="' + esc(p ? p.dump : '') + '" class="inp"></div>'
+    + '</div>'
+    + '<div><span class="lbl">Notas</span><textarea id="pfNotas" rows="2" class="inp resize-none">' + esc(p ? p.notas : '') + '</textarea></div>'
+    + '<div class="flex flex-wrap justify-end gap-3 pt-1">'
+    + (p ? '<button onclick="abrirDel(\'prop\',\'' + p.id + '\')" class="mr-auto border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-sm px-4 py-2.5 rounded-xl transition">🗑 Eliminar</button>' : '')
+    + '<button onclick="p?verPropiedad(p.id):ir(\'propiedades\')" class="px-5 py-2.5 rounded-xl border border-slate-200 font-semibold text-sm hover:bg-slate-50 transition">Cancelar</button>'
+    + '<button onclick="guardarPropiedad()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition active:scale-95">💾 Guardar</button>'
+    + '</div></div></div>';
+}
+
+// NUEVAS FUNCIONES PARA EL BUSCADOR DE CUADRILLAS EN EL FORMULARIO
+var FORM_CREW_ID = null;
+function filtrarCuadrillasForm(){
+  var q = ($('pfCuaSearch').value || '').toLowerCase();
+  var html = '<button type="button" onclick="seleccionarCuaForm(null, \'Sin asignar\')" class="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-400 italic">— Sin asignar —</button>';
+  var filtered = crews.filter(function(c){
+    return c.nombre.toLowerCase().indexOf(q) >= 0;
+  });
+  html += filtered.map(function(c){
+    var s = crewStyle(c.nombre);
+    var active = (c.id === FORM_CREW_ID) ? 'bg-sky-50 font-bold text-sky-700' : 'hover:bg-sky-50 text-slate-600';
+    return '<button type="button" onclick="seleccionarCuaForm(\''+c.id+'\', \''+esc(c.nombre)+'\')" class="w-full text-left px-3 py-2 '+active+' flex items-center gap-2 transition">'+
+           '<span class="w-2 h-2 rounded-full '+s.dot+'"></span>'+esc(c.nombre)+'</button>';
+  }).join('');
+  if(filtered.length === 0) html += '<p class="text-center text-slate-400 text-sm p-3">Sin resultados</p>';
+  $('pfCuaList').innerHTML = html;
+}
+function seleccionarCuaForm(crewId, crewName){
+  FORM_CREW_ID = crewId;
+  filtrarCuadrillasForm(); // Actualiza el resaltado
+}
 
     // Asegúrate de tener también estas dos funciones si no las copiaste antes
     function cambiarFrecuenciaTab(tipo) {
@@ -1726,32 +1758,31 @@ async function guardarPropiedad(){
   var nombre=$('pfNombre').value.trim();
   if(!nombre){toast('⚠️ El nombre es obligatorio');return;}
   
-  // Detectar tipo de frecuencia
+  // Lógica de días intacta
   var esSemanal = !$('vistaFrecSemanal').classList.contains('hidden');
   var dias=''; 
-  var frecRegla='', frecDiaSemana='', frecDiaMes='';
+  var frecRegla = '';
   var frecTipo = esSemanal ? 'Semanal' : 'Mensual';
   
   if(esSemanal){
     var cbs=document.querySelectorAll('.pfDia');
-    for(var i=0;i<cbs.length;i++)if(cbs[i].checked)dias+=cbs[i].value;
+    for(var i=0;i<cbs.length;i++) if(cbs[i].checked) dias+=cbs[i].value;
   } else {
     var btns=document.querySelectorAll('.btn-mensual-dia.bg-sky-500');
-    for(var i=0;i<btns.length;i++)frecRegla += btns[i].getAttribute('data-val')+',';
-    frecRegla = frecRegla.slice(0, -1); // quitar última coma
+    for(var i=0;i<btns.length;i++) frecRegla += btns[i].getAttribute('data-val')+',';
+    frecRegla = frecRegla.slice(0, -1);
   }
 
-  // Preparamos los datos para Supabase (en inglés)
+  // Datos mapeados a Supabase
   var data = {
     name: nombre, 
     service: $('pfServicio').value, 
     city: $('pfCiudad').value,
-    crew_id: crews.find(c => c.nombre === $('pfCuadrilla').value)?.id || null,
+    crew_id: FORM_CREW_ID, // <--- AQUÍ USAMOS EL BUSCADOR
     contractor: $('pfContratista').value.trim(),
     days: dias, 
     frequency_type: frecTipo, 
     days_monthly: frecRegla ? frecRegla.split(',') : [],
-    cycle: $('pfCiclo').value,
     cost_type: $('pfCostoTipo').value,
     cost_amount: Number($('pfCostoMonto').value)||0,
     visits_month: Number($('pfVisitasMes').value)||0,
@@ -1773,9 +1804,11 @@ async function guardarPropiedad(){
       // Actualizamos memoria local
       Object.assign(p, {
         nombre: data.name, service: data.service, ciudad: data.city,
-        cuadrilla: $('pfCuadrilla').value, contractor: data.contractor, dias: data.days,
+        cuadrilla: crews.find(c => c.id === FORM_CREW_ID)?.nombre || '', 
+        crew_id: FORM_CREW_ID,
+        contractor: data.contractor, dias: data.days,
         frecuenciaTipo: data.frequency_type, diasMensual: data.days_monthly,
-        ciclo: data.cycle, costoTipo: data.cost_type, costoMonto: data.cost_amount,
+        costoTipo: data.cost_type, costoMonto: data.cost_amount,
         visitasMes: data.visits_month, estado: data.status, gate: data.gate, dump: data.dump, notas: data.notas
       });
       toast('✅ Propiedad actualizada en la nube');
@@ -1790,10 +1823,11 @@ async function guardarPropiedad(){
     else {
       var np = {
         id: newProp.id, code: newProp.code, nombre: newProp.name, service: newProp.service, ciudad: newProp.city,
-        cuadrilla: crews.find(c=>c.id===newProp.crew_id)?.nombre || '', contractor: newProp.contractor,
-        dias: newProp.days, frecuenciaTipo: newProp.frequency_type, diasMensual: newProp.days_monthly || [],
-        ciclo: newProp.cycle, pattern: newProp.pattern, costoTipo: newProp.cost_type, costoMonto: newProp.cost_amount,
-        visitasMes: newProp.visits_month, estado: newProp.status, fecha: newProp.fecha, gate: newProp.gate, dump: newProp.dump, notas: newProp.notas
+        cuadrilla: crews.find(c=>c.id===newProp.crew_id)?.nombre || '', crew_id: newProp.crew_id,
+        contractor: newProp.contractor, dias: newProp.days, frecuenciaTipo: newProp.frequency_type, 
+        diasMensual: newProp.days_monthly || [], ciclo: newProp.cycle, pattern: newProp.pattern, 
+        costoTipo: newProp.cost_type, costoMonto: newProp.cost_amount, visitasMes: newProp.visits_month, 
+        estado: newProp.status, fecha: newProp.fecha, gate: newProp.gate, dump: newProp.dump, notas: newProp.notas
       };
       props.push(np);
       toast('✅ Propiedad creada en la nube ('+np.code+')');

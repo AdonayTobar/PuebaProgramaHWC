@@ -1914,31 +1914,43 @@ async function guardarPropiedad(){
         + '<button onclick="guardarCrew()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition active:scale-95">💾 Guardar</button>'
         + '</div></div></div>';
     }
-    function guardarCrew() {
-      if (!rolOro()) return;
-      var n = $('cfNombre').value.trim();
-      if (!n) { toast('⚠️ El nombre es obligatorio'); return; }
-      var c = estado.param ? crewDe(estado.param) : null;
-      var data = {
-        nombre: n, ciudad: $('cfCiudad').value, color: $('cfColor').value,
-        responsable: $('cfResp').value.trim(), telefono: $('cfTel').value.trim(), notas: $('cfNotas').value.trim()
-      };
-      if (c) {
-        var old = c.nombre;
-        Object.assign(c, data);
-        if (old !== n) {
-          props.forEach(function (p) { if (p.cuadrilla === old) p.cuadrilla = n; });
-          jornadas.forEach(function (j) { if (j.cuadrilla === old) j.cuadrilla = n; });
-          servicios.forEach(function (s) { if (s.cuadrilla === old) s.cuadrilla = n; });
-        }
-        save(); toast('✅ Cuadrilla actualizada');
-      } else {
-        var max = 0; crews.forEach(function (x) { var m = /^C-(\d+)$/.exec(x.id); if (m) max = Math.max(max, +m[1]); });
-        crews.push(Object.assign({ id: 'C-' + String(max + 1).padStart(4, '0') }, data));
-        save(); toast('✅ Cuadrilla creada');
-      }
-      verCuadrilla(n);
+async function guardarCrew(){
+  if(!rolOro())return;
+  var n=$('cfNombre').value.trim();
+  if(!n){toast('⚠️ El nombre es obligatorio');return;}
+  var c=estado.param?crewDe(estado.param):null;
+  
+  // Preparamos los datos para Supabase
+  var data={name:n,city:$('cfCiudad').value,color:$('cfColor').value,
+    responsable:$('cfResp').value.trim(),telefono:$('cfTel').value.trim(),notas:$('cfNotas').value.trim()};
+    
+  toggleLoading(true);
+  if(c){
+    // ACTUALIZAR
+    const { error } = await supabase.from('crews').update(data).eq('id', c.id);
+    toggleLoading(false);
+    if(error) return toast('❌ Error al actualizar');
+    
+    var oldName = c.nombre;
+    Object.assign(c, {nombre:data.name, ciudad:data.city, color:data.color, responsable:data.responsable, telefono:data.telefono, notas:data.notas});
+    
+    // Si cambió el nombre, actualizamos la memoria local de propiedades y servicios
+    if(oldName !== data.name){
+      props.forEach(function(p){if(p.cuadrilla===oldName)p.cuadrilla=n;});
+      jornadas.forEach(function(j){if(j.cuadrilla===oldName)j.cuadrilla=n;});
+      servicios.forEach(function(s){if(s.cuadrilla===oldName)s.cuadrilla=n;});
     }
+    toast('✅ Cuadrilla actualizada en la nube');
+  } else {
+    // CREAR
+    const { data: newCrew, error } = await supabase.from('crews').insert(data).select().single();
+    toggleLoading(false);
+    if(error) return toast('❌ Error al crear');
+    crews.push({id:newCrew.id, nombre:newCrew.name, ciudad:newCrew.city, color:newCrew.color, responsable:newCrew.responsable, telefono:newCrew.telefono, notas:newCrew.notas});
+    toast('✅ Cuadrilla creada en la nube');
+  }
+  verCuadrilla(n);
+}
 
     /* ===== RECONSTRUÍDO: JORNADAS ===== */
     function rutaCard(j) {
@@ -2146,40 +2158,62 @@ async function guardarPropiedad(){
             + chipServ(p.servicio) + '</label>';
         }).join('') + '</div>';
     }
-    function guardarRuta() {
-      var j = estado.param ? jornadaDe(estado.param) : null;
-      if (j && !puedeEditarJornada(j)) return;
-      var cua = $('rfCua').value, fec = $('rfFecha').value;
-      if (!cua) { toast('⚠️ Selecciona una cuadrilla'); return; }
-      if (!fec) { toast('⚠️ Selecciona la fecha'); return; }
-      var ffin = $('rfFechaFin').value || '';
-      if (ffin && ffin < fec) { toast('⚠️ La fecha de fin no puede ser anterior a la fecha inicial'); return; }
-      var ids = []; var cbs = document.querySelectorAll('.rfItem');
-      for (var i = 0; i < cbs.length; i++)if (cbs[i].checked) ids.push(cbs[i].value);
-      if (!ids.length) { toast('⚠️ Marca al menos una propiedad'); return; }
-      if (!j) {
-        var sem = inicioDeSemanaISO(fec);
-        var nSem = jornadas.filter(function (x) { return x.cuadrilla === cua && inicioDeSemanaISO(x.fecha) === sem; }).length;
-        if (nSem >= MAX_JORNADAS_SEMANA) { toast('⚠️ Máximo ' + MAX_JORNADAS_SEMANA + ' jornadas por semana para esta cuadrilla'); return; }
+async function guardarRuta(){
+  var j=estado.param?jornadaDe(estado.param):null;
+  if(j&&!puedeEditarJornada(j))return;
+  var cua=$('rfCua').value,fec=$('rfFecha').value;
+  if(!cua){toast('⚠️ Selecciona una cuadrilla');return;}
+  if(!fec){toast('⚠️ Selecciona la fecha');return;}
+  var ffin=$('rfFechaFin').value||'';
+  if(ffin&&ffin<fec){toast('⚠️ La fecha de fin no puede ser anterior a la fecha inicial');return;}
+  
+  var crewObj = crews.find(c=>c.nombre===cua);
+  if(!crewObj) return toast('⚠️ Cuadrilla no encontrada');
+  
+  var ids=[];var cbs=document.querySelectorAll('.rfItem');
+  for(var i=0;i<cbs.length;i++)if(cbs[i].checked)ids.push(cbs[i].value);
+  
+  var data = { crew_id: crewObj.id, fecha: fec, fecha_fin: ffin, name: $('rfNombre').value.trim(), notas: $('rfNotas').value.trim(), created_by: USUARIO.nombre, created_by_role: USUARIO.rol };
+  
+  toggleLoading(true);
+  if(j){
+    // ACTUALIZAR JORNADA
+    const { error } = await supabase.from('journeys').update(data).eq('id', j.id);
+    if(error) { toggleLoading(false); return toast('❌ Error al actualizar jornada'); }
+    
+    // Sincronizar items: Borramos los viejos y metemos los nuevos (forma más rápida y segura)
+    await supabase.from('journey_items').delete().eq('journey_id', j.id);
+    var newItems = ids.map(function(pid){ return { journey_id: j.id, property_id: pid, status: 'Pendiente' }; });
+    if(newItems.length > 0) await supabase.from('journey_items').insert(newItems);
+    
+    // Actualizamos memoria local
+    j.cuadrilla=cua; j.fecha=fec; j.fechaFin=ffin; j.notas=data.notas; j.nombre=data.name;
+    var existingItems = j.items.filter(function(it){ return ids.indexOf(it.propId) >= 0 && it.estado !== 'Pendiente'; });
+    ids.forEach(function(pid){
+      if(!existingItems.some(function(it){ return it.propId === pid; })){
+        existingItems.push({propId:pid,estado:'Pendiente',servId:null,pospFecha:'',pospMotivo:'',pospPor:''});
       }
-      var items = (j ? j.items : []).filter(function (it) { return ids.indexOf(it.propId) >= 0; });
-      ids.forEach(function (pid) {
-        if (!items.some(function (it) { return it.propId === pid; }))
-          items.push({ propId: pid, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: '' });
-      });
-      var nombre = $('rfNombre').value.trim();
-      if (j) {
-        j.nombre = nombre; j.cuadrilla = cua; j.fecha = fec; j.fechaFin = ffin; j.notas = $('rfNotas').value.trim(); j.items = items;
-        save(); estado.rutaPreCua = ''; toast('✅ Jornada actualizada'); verRuta(j.id);
-      } else {
-        var max = 0; jornadas.forEach(function (x) { var m = /^J-(\d+)$/.exec(x.id); if (m) max = Math.max(max, +m[1]); });
-        var nj = {
-          id: 'J-' + String(max + 1).padStart(4, '0'), cuadrilla: cua, fecha: fec, fechaFin: ffin, nombre: nombre,
-          notas: $('rfNotas').value.trim(), creadaPor: USUARIO.nombre, creadaPorRol: USUARIO.rol, items: items, ts: Date.now()
-        };
-        jornadas.push(nj); save(); estado.rutaPreCua = ''; toast('🗺️ Jornada creada'); verRuta(nj.id);
-      }
-    }
+    });
+    j.items = existingItems;
+    toggleLoading(false);
+    toast('✅ Jornada actualizada en la nube');
+    verRuta(j.id);
+  } else {
+    // CREAR JORNADA
+    const { data: newJ, error } = await supabase.from('journeys').insert(data).select().single();
+    if(error) { toggleLoading(false); return toast('❌ Error al crear jornada'); }
+    
+    var newItems = ids.map(function(pid){ return { journey_id: newJ.id, property_id: pid, status: 'Pendiente' }; });
+    if(newItems.length > 0) await supabase.from('journey_items').insert(newItems);
+    
+    var nj = { id:newJ.id, cuadrilla:cua, fecha:fec, fechaFin:ffin, nombre:data.name, notas:data.notas, creadaPor:USUARIO.nombre, creadaPorRol:USUARIO.rol, items:[], ts:Date.now() };
+    ids.forEach(function(pid){ nj.items.push({propId:pid,estado:'Pendiente',servId:null,pospFecha:'',pospMotivo:'',pospPor:''}); });
+    jornadas.push(nj);
+    toggleLoading(false);
+    toast('🗺️ Jornada creada en la nube');
+    verRuta(nj.id);
+  }
+}
 
     /* ===== RECONSTRUÍDO: MODALES (servicio, posponer, agregar, eliminar) ===== */
     function abrirServModal(propId, jornId) {
@@ -2197,24 +2231,34 @@ async function guardarPropiedad(){
       $('modalServ').classList.remove('hidden');
     }
     function cerrarServModal() { $('modalServ').classList.add('hidden'); SERV_ACT = null; SERV_JORN = null; }
-    function guardarServ() {
-      if (!SERV_ACT) return cerrarServModal();
-      var p = propDe(SERV_ACT); if (!p) return cerrarServModal();
-      var f = $('svFecha').value; if (!f) { toast('⚠️ Selecciona una fecha'); return; }
-      var n = 0; servicios.forEach(function (s) { var m = /^S-(\d+)$/.exec(s.id); if (m) n = Math.max(n, +m[1]); });
-      var sv = {
-        id: 'S-' + String(n + 1).padStart(4, '0'), propId: p.id, fecha: f,
-        estado: $('svEstado').value, cuadrilla: $('svCua').value,
-        notas: $('svNotas').value.trim(), por: USUARIO.nombre, ts: Date.now()
-      };
-      servicios.push(sv);
-      if (SERV_JORN) {
-        var j = jornadaDe(SERV_JORN);
-        if (j) j.items.forEach(function (it) { if (it.propId === p.id && it.estado === 'Pendiente') { it.estado = 'Hecho'; it.servId = sv.id; } });
+async function guardarServ(){
+  if(!SERV_ACT)return cerrarServModal();
+  var p=propDe(SERV_ACT);if(!p)return cerrarServModal();
+  var f=$('svFecha').value;if(!f){toast('⚠️ Selecciona una fecha');return;}
+  var crewName = $('svCua').value;
+  var crewObj = crews.find(c=>c.nombre===crewName);
+  
+  var data = { property_id: p.id, fecha: f, estado: $('svEstado').value, crew_id: crewObj ? crewObj.id : null, notas: $('svNotas').value.trim(), por: USUARIO.nombre };
+  
+  toggleLoading(true);
+  const { data: newServ, error } = await supabase.from('services').insert(data).select().single();
+  toggleLoading(false);
+  if(error) return toast('❌ Error al registrar servicio');
+  
+  var sv = { id:newServ.id, propId:p.id, fecha:f, estado:newServ.estado, cuadrilla:crewName, notas:newServ.notas, por:USUARIO.nombre, ts:Date.now() };
+  servicios.push(sv);
+  
+  if(SERV_JORN){
+    var j=jornadaDe(SERV_JORN);
+    if(j)j.items.forEach(function(it){
+      if(it.propId===p.id&&it.estado==='Pendiente'){
+        it.estado='Hecho';it.servId=sv.id;
       }
-      save(); cerrarServModal(); renderApp();
-      toast('✅ Servicio registrado' + (SERV_JORN ? '' : ''));
-    }
+    });
+  }
+  cerrarServModal();renderApp();
+  toast('✅ Servicio registrado en la nube');
+}
     function abrirPosModal(propId, jornId) {
       var p = propDe(propId); if (!p || !jornadaDe(jornId)) return;
       POSP = { propId: propId, jornId: jornId };
@@ -2224,20 +2268,36 @@ async function guardarPropiedad(){
       $('modalPos').classList.remove('hidden');
     }
     function cerrarPosModal() { $('modalPos').classList.add('hidden'); POSP = null; }
-    function confirmarPosponer() {
-      if (!POSP) return cerrarPosModal();
-      var f = $('posFecha').value, m = $('posMotivo').value.trim();
-      if (!f) { toast('⚠️ Indica la nueva fecha'); return; }
-      if (!m) { toast('⚠️ Escribe el motivo de la posposición'); return; }
-      var j = jornadaDe(POSP.jornId);
-      if (j) j.items.forEach(function (it) {
-        if (it.propId === POSP.propId && it.estado === 'Pendiente') {
-          it.estado = 'Pospuesto'; it.pospFecha = f; it.pospMotivo = m; it.pospPor = USUARIO.nombre;
-        }
-      });
-      save(); cerrarPosModal(); renderApp();
-      toast('⏩ Servicio pospuesto · reporte generado');
-    }
+async function confirmarPosponer(){
+  if(!POSP)return cerrarPosModal();
+  var f=$('posFecha').value,m=$('posMotivo').value.trim();
+  if(!f){toast('⚠️ Indica la nueva fecha');return;}
+  if(!m){toast('⚠️ Escribe el motivo de la posposición');return;}
+  var j=jornadaDe(POSP.jornId);
+  if(!j)return cerrarPosModal();
+  
+  var item = j.items.find(i => i.propId === POSP.propId);
+  if(!item) return cerrarPosModal();
+  
+  toggleLoading(true);
+  // Buscamos el ID del item en la DB
+  const { data: dbItem } = await supabase.from('journey_items')
+    .select('id')
+    .eq('journey_id', j.id)
+    .eq('property_id', POSP.propId)
+    .single();
+    
+  if(dbItem){
+    await supabase.from('journey_items').update({ 
+      status: 'Pospuesto', posp_fecha: f, posp_motivo: m, posp_por: USUARIO.nombre 
+    }).eq('id', dbItem.id);
+  }
+  toggleLoading(false);
+  
+  item.estado='Pospuesto';item.pospFecha=f;item.pospMotivo=m;item.pospPor=USUARIO.nombre;
+  cerrarPosModal();renderApp();
+  toast('⏩ Servicio pospuesto · reporte generado');
+}
     function abrirAddProp(jornId) {
       if (!jornadaDe(jornId)) return;
       AP_JORN = jornId;
@@ -2257,16 +2317,36 @@ async function guardarPropiedad(){
       }).join('')
         : '<p class="text-sm text-slate-400 text-center py-6">' + (q ? 'Sin resultados' : 'Todas las propiedades ya están en la ruta') + '</p>';
     }
-    function agregarPropAJornada(pid) {
-      var j = jornadaDe(AP_JORN); if (!j || !puedeEditarJornada(j)) return;
-      j.items.push({ propId: pid, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: '' });
-      save(); cerrarAddProp(); renderApp(); toast('＋ Propiedad agregada a la ruta');
-    }
-    function quitarItemJornada(jornId, pid) {
-      var j = jornadaDe(jornId); if (!j || !puedeEditarJornada(j)) return;
-      j.items = j.items.filter(function (i) { return i.propId !== pid; });
-      save(); renderApp(); toast('🗑️ Propiedad quitada de la ruta');
-    }
+async function agregarPropAJornada(pid){
+  var j=jornadaDe(AP_JORN);if(!j||!puedeEditarJornada(j))return;
+  
+  // Verificamos si ya existe en la DB para no duplicar
+  const { data: dbItem } = await supabase.from('journey_items')
+    .select('id')
+    .eq('journey_id', j.id)
+    .eq('property_id', pid)
+    .maybeSingle();
+    
+  if(!dbItem){
+    toggleLoading(true);
+    await supabase.from('journey_items').insert({ journey_id: j.id, property_id: pid, status: 'Pendiente' });
+    toggleLoading(false);
+  }
+  
+  j.items.push({propId:pid,estado:'Pendiente',servId:null,pospFecha:'',pospMotivo:'',pospPor:''});
+  cerrarAddProp();renderApp();toast('＋ Propiedad agregada a la ruta');
+}
+
+async function quitarItemJornada(jornId,pid){
+  var j=jornadaDe(jornId);if(!j||!puedeEditarJornada(j))return;
+  
+  toggleLoading(true);
+  await supabase.from('journey_items').delete().eq('journey_id', j.id).eq('property_id', pid);
+  toggleLoading(false);
+  
+  j.items=j.items.filter(function(i){return i.propId!==pid;});
+  renderApp();toast('🗑️ Propiedad quitada de la ruta');
+}
 
     /* ===== MODAL ASIGNAR CUADRILLA RÁPIDO ===== */
 /* ===== MODAL ASIGNAR CUADRILLA RÁPIDO (CON BUSCADOR) ===== */
@@ -2432,15 +2512,28 @@ async function confirmarDel(){
   if(!DEL)return cerrarDel();
   var t=DEL.tipo,id=DEL.id;
   
+  toggleLoading(true);
   if(t==='prop'){
-    toggleLoading(true);
-    const { error } = await supabase.from('properties').delete().eq('id', id);
-    toggleLoading(false);
-    if(error) return toast('❌ Error al eliminar');
+    await supabase.from('properties').delete().eq('id', id);
     props = props.filter(function(p){return p.id!==id;});
     toast('🗑️ Propiedad eliminada de la nube');
     ir('propiedades');
+  } 
+  else if(t==='crew'){
+    var crew = crews.find(c => c.nombre === id);
+    if(crew) await supabase.from('crews').delete().eq('id', crew.id);
+    crews = crews.filter(function(c){return c.nombre!==id;});
+    toast('🗑️ Cuadrilla eliminada de la nube');
+    ir('cuadrillas');
+  } 
+  else if(t==='jornada'){
+    var j = jornadaDe(id);
+    if(j) await supabase.from('journeys').delete().eq('id', j.id);
+    jornadas = jornadas.filter(function(x){return x.id!==id;});
+    toast('🗑️ Jornada eliminada de la nube');
+    ir('rutas');
   }
+  toggleLoading(false);
   cerrarDel();
 }
 

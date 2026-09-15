@@ -2450,34 +2450,39 @@ async function guardarAsignarCua(){
     var fechaSel = $('asignFechaFutura').value;
     if(!fechaSel){ toast('⚠️ Selecciona una fecha'); return; }
     
-    var crewName = crews.find(c => c.id === ASIGN_CREW_ID)?.nombre || '';
+    // NUEVO: Verificar si está fuera del horario habitual
+    if(!tieneServicioEseDia(p, fechaSel)){
+      // Si no tiene servicio ese día, lanzamos advertencia
+      var confirmar = confirm('⚠️ ATENCIÓN:\n\nEsta propiedad no tiene servicio programado regularmente para el '+fechaSel+'.\n\n¿Deseas agregar este servicio especial de todas formas?');
+      if(!confirmar){
+        return; // Si el usuario le da a cancelar, no guardamos nada
+      }
+    }
     
-    // Buscamos si ya existe una jornada para esa cuadrilla y fecha
+    var crewName = crews.find(c => c.id === ASIGN_CREW_ID)?.nombre || '';
     var j = jornadas.find(function(x){ return x.cuadrilla === crewName && x.fecha === fechaSel; });
     
     toggleLoading(true);
     if(!j){
-      // Si no existe, la creamos en la nube
       var jData = { 
-        crew_id: ASIGN_CREW_ID, fecha: fechaSel, fecha_fin: '', 
+        crew_id: ASIGN_CREW_ID, fecha: fechaSel, 
+        fecha_fin: null, // <--- FIX: Aquí estaba el error, ahora va null
         name: 'Ruta asignada ('+fechaSel+')', notas: 'Generada desde asignación rápida', 
         created_by: USUARIO.nombre, created_by_role: USUARIO.rol 
       };
       const { data: newJ, error } = await supabase.from('journeys').insert(jData).select().single();
-      if(error){ toggleLoading(false); return toast('❌ Error al crear jornada futura'); }
+      if(error){ toggleLoading(false); console.error(error); return toast('❌ Error al crear jornada futura'); }
       
-      // Insertamos la propiedad en esa nueva jornada
       await supabase.from('journey_items').insert({ journey_id: newJ.id, property_id: p.id, status: 'Pendiente' });
       
       j = { 
         id: newJ.id, cuadrilla: crewName, crew_id: ASIGN_CREW_ID, fecha: fechaSel, 
-        fechaFin: '', nombre: jData.name, notas: jData.notas, creadaPor: USUARIO.nombre, 
+        fechaFin: null, nombre: jData.name, notas: jData.notas, creadaPor: USUARIO.nombre, 
         creadaPorRol: USUARIO.rol, items: [{propId: p.id, estado: 'Pendiente', servId: null, pospFecha: '', pospMotivo: '', pospPor: ''}], 
         ts: Date.now() 
       };
       jornadas.push(j);
     } else {
-      // Si ya existe, solo agregamos la propiedad
       var existe = j.items.some(it => it.propId === p.id);
       if(!existe){
         await supabase.from('journey_items').insert({ journey_id: j.id, property_id: p.id, status: 'Pendiente' });

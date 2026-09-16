@@ -2909,46 +2909,48 @@ async function confirmarDel(){
       }
     }
 
-    async function hacerLogin() {
-      var email = $('loginEmail').value.trim();
-      var pass = $('loginPass').value;
-      var errBox = $('loginError');
-      var btn = $('loginBtn');
-      var btnText = $('loginBtnText');
-      var btnSpinner = $('loginBtnSpinner');
+async function hacerLogin() {
+  var email = $('loginEmail').value.trim();
+  var pass = $('loginPass').value;
+  var errBox = $('loginError');
+  var btn = $('loginBtn');
+  var btnText = $('loginBtnText');
+  var btnSpinner = $('loginBtnSpinner');
 
-      errBox.classList.add('hidden');
+  errBox.classList.add('hidden');
 
-      if (!email || !pass) {
-        errBox.textContent = '⚠️ Por favor ingresa correo y contraseña';
-        errBox.classList.remove('hidden');
-        return;
-      }
+  if (!email || !pass) {
+    errBox.textContent = '⚠️ Por favor ingresa correo y contraseña';
+    errBox.classList.remove('hidden');
+    return;
+  }
 
-      // Estado de cargando en el botón
-      btn.disabled = true;
-      btn.classList.add('opacity-70', 'cursor-wait');
-      btnText.textContent = 'Entrando...';
-      btnSpinner.classList.remove('hidden');
+  // Estado de cargando en el botón
+  btn.disabled = true;
+  btn.classList.add('opacity-70', 'cursor-wait');
+  btnText.textContent = 'Entrando...';
+  btnSpinner.classList.remove('hidden');
 
-      toggleLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: pass });
-      toggleLoading(false);
+  toggleLoading(true);
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: pass });
+  toggleLoading(false);
 
-      // Restaurar botón
-      btn.disabled = false;
-      btn.classList.remove('opacity-70', 'cursor-wait');
-      btnText.textContent = 'Entrar';
-      btnSpinner.classList.add('hidden');
+  // Restaurar botón
+  btn.disabled = false;
+  btn.classList.remove('opacity-70', 'cursor-wait');
+  btnText.textContent = 'Entrar';
+  btnSpinner.classList.add('hidden');
 
-      if (error) {
-        // Traducir el error más común de Supabase
-        var msg = error.message;
-        if (msg === 'Invalid login credentials') msg = 'Correo o contraseña incorrectos';
-        errBox.textContent = '❌ ' + msg;
-        errBox.classList.remove('hidden');
-      }
-    }
+  if (error) {
+    var msg = error.message;
+    if (msg === 'Invalid login credentials') msg = 'Correo o contraseña incorrectos';
+    errBox.textContent = '❌ ' + msg;
+    errBox.classList.remove('hidden');
+  } else {
+    // NUEVO: Si el login fue exitoso, cargamos la app inmediatamente sin esperar recarga
+    inicializarApp();
+  }
+}
 
     async function cerrarSesion() {
       toggleLoading(true);
